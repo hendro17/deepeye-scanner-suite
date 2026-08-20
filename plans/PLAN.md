@@ -152,122 +152,156 @@ Vue SPA ⇄ FastAPI ⇄ subprocess `python deep_eye.py -u URL -c config.yaml` (c
 
 ## 6. Execution Phases
 
-### Phase 0 — Foundation & Python Verification
-
-**Tasks:**
-1. `git init` in `DeepEye-scanner-suite/`
-2. `git submodule add https://github.com/zakirkun/deep-eye scanner/deep-eye`
-3. `uv venv` → `uv pip install -r scanner/deep-eye/requirements.txt` (try Python 3.14 first; fallback `uv python install 3.12`)
-4. `cp scanner/deep-eye/config/config.example.yaml scanner/deep-eye/config/config.yaml`
-5. Verify: `cd scanner/deep-eye && python deep_eye.py --help` runs clean
-
-**Acceptance criteria:**
-- `deep_eye.py --help` outputs without error
-- venv created and requirements installed
-- config.yaml copied from example
+> **Legend**: ✅ done · ⏳ partial · ❌ not started
 
 ---
 
-### Phase 1 — FastAPI Bridge
+### Phase 0 — Foundation & Python Verification ✅
 
 **Tasks:**
-1. Scaffold FastAPI app (`api/main.py`) + uvicorn runner
-2. `engine_runner.py`: `subprocess.Popen(["python", "deep_eye.py", ...args], cwd=scanner/deep-eye)`, capture stdout line-by-line, strip ANSI via `re.sub(r'\x1b\[[0-9;]*m', '', line)`, emit to async queue
-3. SSE endpoint `/api/scans/{id}/stream` via `StreamingResponse` (no extra dep — `sse-starlette` optional)
-4. SQLite job store via `sqlite3` stdlib
-5. `config_service.py`: read/write `config.yaml` via `pyyaml` (already a deep-eye dep), mask `api_key` values on GET
-6. Serve `reports/` as static files via `StaticFiles`
-7. `report_store.py`: parse report JSON → extract `vulnerabilities` list → index in SQLite
+1. ✅ `git init` in `DeepEye-scanner-suite/`
+2. ✅ `git submodule add https://github.com/zakirkun/deep-eye scanner/deep-eye`
+3. ✅ `uv venv` → Python 3.14 failed → `uv python install 3.12` fallback → `uv venv --python 3.12` → `uv pip install -r requirements.txt` (126 packages)
+4. ✅ `cp scanner/deep-eye/config/config.example.yaml scanner/deep-eye/config/config.yaml`
+5. ✅ Verify: `python deep_eye.py --help` runs clean
 
 **Acceptance criteria:**
-- `curl POST /api/scans` creates job
-- `curl POST /api/scans/{id}/start` launches subprocess
-- `curl GET /api/scans/{id}/stream` receives SSE log lines
-- `curl POST /api/scans/{id}/stop` kills process
-- Report file downloadable via `/api/reports/{filename}`
+- ✅ `deep_eye.py --help` outputs without error
+- ✅ venv created and requirements installed
+- ✅ config.yaml copied from example
+
+**Commit**: e027293 (initial), 8a3b9dd (infrastructure)
+
+**Potential issues:**
+- ⚠️ Two venvs exist: `scanner/deep-eye/.venv` (Phase 0) and root `.venv` (Phase 1+2). Root `.venv` is the active one used by API. Old scanner venv is redundant.
+- ⚠️ Python 3.14 local has C-ext wheel issues — confirmed, using 3.12 fallback.
 
 ---
 
-### Phase 2 — UI via Open Design MCP
+### Phase 1 — FastAPI Bridge ✅
 
 **Tasks:**
-1. Call `@open-design` subagent for:
-   - Design system spec: dark futuristic theme (navy/black background, neon cyan/green accents, glassmorphism cards, monospace terminal font)
-   - Mockups for each screen: Dashboard, New Scan Wizard, Live Scan Console, Findings Table, Report Viewer, Settings
-2. Implement Vue 3 views per design output
-3. ApexCharts dashboard:
-   - Severity distribution (donut: critical/high/medium/low/info)
-   - Scan history timeline (bar chart)
-   - URLs crawled per scan
-4. Terminal console component: `<pre>` + auto-scroll for SSE log stream
-5. Settings page: provider form with Custom OpenAI-compatible (base_url + api_key + model)
+1. ✅ Scaffold FastAPI app (`api/main.py`) + uvicorn runner
+2. ✅ `engine_runner.py`: subprocess.Popen, stdout capture, ANSI strip, async queue for SSE
+3. ✅ SSE endpoint `/api/scans/{id}/stream` via `StreamingResponse`
+4. ✅ SQLite job store via `sqlite3` stdlib (jobs + findings tables)
+5. ✅ `config_service.py`: read/write `config.yaml` via `pyyaml`, mask `api_key` values on GET
+6. ✅ Serve `reports/` via `FileResponse` in reports router
+7. ✅ `report_store.py`: parse report JSON → extract vulnerabilities → index in SQLite
+
+**Acceptance criteria:**
+- ✅ `curl GET /api/health` → `{"status":"ok"}`
+- ✅ `curl GET /api/config` → masked config returned
+- ✅ `curl GET /api/providers/status` → provider list returned
+- ⚠️ `curl POST /api/scans` creates job — endpoint exists, not tested with real data
+- ⚠️ `curl POST /api/scans/{id}/start` launches subprocess — not tested with real scan
+- ⚠️ `curl GET /api/scans/{id}/stream` receives SSE — endpoint exists, not tested with real scan
+- ⚠️ `curl POST /api/scans/{id}/stop` kills process — not tested
+- ⚠️ Report file downloadable — not tested with real report
+
+**Commit**: 1fec165
+
+**Potential issues:**
+- ❌ **No tests written**. `api/pyproject.toml` configured for pytest, `api/requirements-dev.txt` installed, but zero test files exist in `api/tests/`.
+- ⚠️ **SSE untested with real scan**. Endpoint + ANSI strip + queue logic written but never run against actual `deep_eye.py` output.
+- ⚠️ **Report parsing untested**. `report_store.parse_findings()` assumes JSON report structure (vulnerabilities list with type/severity/url/parameter/payload/evidence fields). Not verified against actual deep-eye JSON output.
+- ⚠️ **engine_runner._finalize_scan** scans REPORTS_DIR for new JSON files by comparing against previous listing. If deep-eye writes reports to a different path or uses non-standard filenames, findings won't be parsed.
+- ⚠️ **No auth**. API endpoints are open — no token, no session, no rate limiting. Acceptable for local dev, blocker for deploy.
+- ⚠️ **No input validation on config write**. `PUT /api/config` accepts arbitrary YAML — no schema validation against deep-eye's config structure.
+
+---
+
+### Phase 2 — UI via Open Design MCP ✅ (partial)
+
+**Tasks:**
+1. ✅ Call `@open-design` subagent — 12 files, 3776 lines in `web/design/`:
+   - ✅ Design system: tokens.css (colors, glassmorphism, neon glows), palette.md, typography.md, layouts.md, components.md (17 components)
+   - ✅ Mockups for 6 screens: dashboard, new-scan, scan-live, findings, reports, settings
+2. ✅ Implement Vue 3 views per design output — all 6 views created
+3. ⚠️ ApexCharts dashboard: `vue3-apexcharts` installed but **not used in Dashboard.vue** — stat cards only, no donut/bar charts
+4. ✅ Terminal console component: SSE EventSource, color-coded log lines, auto-scroll, 10k line cap
+5. ✅ Settings page: provider form with Custom OpenAI-compatible (base_url + api_key + model)
 
 **Screens:**
-| Screen | Purpose |
-|---|---|
-| Dashboard | Overview: total scans, findings by severity (ApexCharts), recent scans list |
-| New Scan | Wizard: target URL, scope-nl, enabled checks (60+ toggles), threads/depth, formats, authorization checkbox |
-| ScanLive | Real-time terminal console (SSE), progress, stop button |
-| Findings | Table: severity filter, type filter, search; expandable rows for evidence/remediation |
-| Reports | List artifacts per scan, download buttons (html/pdf/json/sarif/junit/csv/xlsx) |
-| Settings | AI provider config (incl. Custom), scanner settings, notifications, proxy, compliance |
+| Screen | Status | Notes |
+|---|---|---|
+| Dashboard | ✅ created | Stat cards + recent scans table. **No ApexCharts** (severity donut, history bar missing). |
+| New Scan | ✅ created | Target URL, scope-nl, threads/depth sliders, 7 format toggles, authorization checkbox. **No 71 vuln check toggles.** |
+| ScanLive | ✅ created | SSE terminal, auto-scroll, stop button, status indicator. |
+| Findings | ✅ created | Filterable table, severity filters, expandable detail rows. |
+| Reports | ✅ created | Artifact list, format badges, download buttons. |
+| Settings | ⏳ partial | **3 of 7 tabs** implemented (providers, scanner, maintenance). Missing: notifications, proxy, compliance, advanced. |
 
 **Acceptance criteria:**
-- Full flow works in browser: input target → start scan → live log → findings appear → download report → configure provider keys
-- Design matches Open Design MCP output
-- Responsive layout
+- ⚠️ Full flow works in browser — not tested end-to-end with real scan
+- ✅ Design matches Open Design MCP output (tokens imported in main.css)
+- ⚠️ Responsive layout — not tested on mobile
+
+**Commit**: 1fec165
+
+**Potential issues:**
+- ❌ **Settings incomplete**: 3/7 tabs. Missing notifications, proxy, compliance, advanced (RAG/rate-limiting/logging/stealth). Design spec exists in `web/design/screens/settings.md` (42299 bytes) but not implemented.
+- ❌ **NewScan wizard missing vuln check selectors**: 71 checks in 15 categories designed in `web/design/screens/new-scan.md` but not implemented. Users cannot select specific checks.
+- ❌ **No diff/retest UI**: deep-eye supports `--diff` and `--retest-new` but no UI for it.
+- ❌ **No OpenAPI ingest UI**: deep-eye can ingest OpenAPI specs but no upload UI.
+- ❌ **No login macro UI**: deep-eye supports login replay but no config UI.
+- ⚠️ **ApexCharts not rendered**: `vue3-apexcharts` installed, design spec includes donut+bar configs, but Dashboard.vue only shows stat cards.
+- ⚠️ **`pnpm run build` fails**: pnpm tries `pnpm install` first → esbuild build scripts error. Workaround: `node_modules/.bin/vite build` works. Need `.npmrc` with `ignore-scripts=true` or fix pnpm config.
+- ⚠️ **No frontend tests**: `vitest.config.ts` exists but zero test files.
+- ⚠️ **dist/ committed?**: Built but should be in .gitignore — verify.
 
 ---
 
-### Phase 3 — CLI Parity (All Features, Phased)
+### Phase 3 — CLI Parity (All Features, Phased) ❌
 
 Expose every deep-eye CLI feature through the UI:
 
-| Feature Group | UI Surface |
-|---|---|
-| Diff & retest | "Compare Scans" page: select two scans → diff view (html/json/csv) |
-| Format selector | Report download dropdown: html, pdf, json, sarif, junit, csv, xlsx |
-| Notifications | Settings: email (from/to), Slack (webhook+channel), Discord (webhook) |
-| Auth macros | Settings: login macro upload/config, multi-role session store |
-| Proxy toggle | Settings: mitmproxy/mitmweb toggle, proxy URL |
-| CVE DB maintenance | Settings: "Update CVE DB" + "Build RAG Index" buttons → trigger scripts |
-| Subdomain/recon toggles | New Scan wizard: enable_recon, full_scan, quick_scan, scan_subdomains |
-| OpenAPI ingest | New Scan: upload OpenAPI spec → seed crawl targets |
-| Scope-nl | New Scan: natural language scope input field |
-| Compliance toggle | Settings: enable, select frameworks (PCI-DSS, SOC2, ISO 27001) |
-| Templates browser | Settings: list YAML templates, tag filters |
-| Login replay | Settings: macro_path, abort_on_fail, recheck_interval |
-| Secrets scanner | New Scan: toggle, pattern selection |
-| Rate limiting | Settings: requests_per_second, burst_size, delay_on_error |
-| TLS evasion | Settings: impersonate (chrome120 etc.) |
-| Advanced rendering | Settings: enable_javascript_rendering, screenshot, browser_use_ai |
-| AI triage | Settings: enable, drop_false_positives, drop_threshold, min_severity |
-| Bug bounty | Settings: format (hackerone/bugcrowd/generic), output_directory |
+| Feature Group | UI Surface | Status |
+|---|---|---|
+| Diff & retest | "Compare Scans" page: select two scans → diff view (html/json/csv) | ❌ |
+| Format selector | Report download dropdown: html, pdf, json, sarif, junit, csv, xlsx | ⏳ toggle exists in NewScan, no report download dropdown |
+| Notifications | Settings: email (from/to), Slack (webhook+channel), Discord (webhook) | ❌ |
+| Auth macros | Settings: login macro upload/config, multi-role session store | ❌ |
+| Proxy toggle | Settings: mitmproxy/mitmweb toggle, proxy URL | ❌ |
+| CVE DB maintenance | Settings: "Update CVE DB" + "Build RAG Index" buttons | ✅ buttons exist in Settings maintenance tab |
+| Subdomain/recon toggles | New Scan wizard: enable_recon, full_scan, quick_scan, scan_subdomains | ❌ |
+| OpenAPI ingest | New Scan: upload OpenAPI spec → seed crawl targets | ❌ |
+| Scope-nl | New Scan: natural language scope input field | ✅ input exists in NewScan |
+| Compliance toggle | Settings: enable, select frameworks (PCI-DSS, SOC2, ISO 27001) | ❌ |
+| Templates browser | Settings: list YAML templates, tag filters | ❌ |
+| Login replay | Settings: macro_path, abort_on_fail, recheck_interval | ❌ |
+| Secrets scanner | New Scan: toggle, pattern selection | ❌ |
+| Rate limiting | Settings: requests_per_second, burst_size, delay_on_error | ❌ |
+| TLS evasion | Settings: impersonate (chrome120 etc.) | ❌ |
+| Advanced rendering | Settings: enable_javascript_rendering, screenshot, browser_use_ai | ❌ |
+| AI triage | Settings: enable, drop_false_positives, drop_threshold, min_severity | ❌ |
+| Bug bounty | Settings: format (hackerone/bugcrowd/generic), output_directory | ❌ |
+| Vuln check selector | New Scan: 71 checks in 15 categories toggle grid | ❌ |
 
 **Acceptance criteria:**
-- Every config.yaml section has corresponding UI
-- Every CLI flag has corresponding UI control
-- Scan wizard can reproduce any CLI invocation
+- ❌ Every config.yaml section has corresponding UI
+- ❌ Every CLI flag has corresponding UI control
+- ❌ Scan wizard can reproduce any CLI invocation
 
 ---
 
-### Phase 4 — Deploy Hardening
+### Phase 4 — Deploy Hardening ❌
 
 **Tasks:**
-1. `docker-compose.yml`:
+1. ❌ `docker-compose.yml`:
    - `api` service: Python + uvicorn, mounts scanner/ + reports/ + data/
    - `web` service: Vue built static files served by nginx (or built into api)
    - Optional `chromium` service for Playwright (lazy start)
    - Volume mounts: `scanner/deep-eye/data/`, `scanner/deep-eye/reports/`, `scanner/deep-eye/logs/`
-2. Auth: token-based (local-first), configurable via `.env`
-3. HTTPS: Caddy or Traefik reverse proxy notes in README
-4. Data persistence: named volumes for SQLite + reports + auth sessions
-5. Health check endpoint: `GET /api/health`
+2. ❌ Auth: token-based (local-first), configurable via `.env`
+3. ❌ HTTPS: Caddy or Traefik reverse proxy notes in README
+4. ❌ Data persistence: named volumes for SQLite + reports + auth sessions
+5. ✅ Health check endpoint: `GET /api/health`
 
 **Acceptance criteria:**
-- `docker compose up` → full app accessible at `localhost`
-- Reports and data persist across container restarts
-- Auth token required for API access
+- ❌ `docker compose up` → full app accessible at `localhost`
+- ❌ Reports and data persist across container restarts
+- ❌ Auth token required for API access
 
 ---
 
@@ -328,17 +362,49 @@ Or single command:
 
 ## 11. Milestone Summary
 
-| Phase | Deliverable | Exit Criteria |
-|---|---|---|
-| 0 | Repo + submodule + venv + CLI verified | `--help` runs clean |
-| 1 | FastAPI bridge + SSE + config + reports | curl full scan lifecycle works |
-| 2 | Vue UI with all core screens | Browser end-to-end flow works |
-| 3 | All CLI features exposed in UI | Every config section has UI |
-| 4 | Docker deploy + auth + persistence | `docker compose up` serves app |
+| Phase | Deliverable | Exit Criteria | Status | Commit |
+|---|---|---|---|---|
+| 0 | Repo + submodule + venv + CLI verified | `--help` runs clean | ✅ Done | e027293 |
+| 1 | FastAPI bridge + SSE + config + reports | curl full scan lifecycle works | ✅ Done (untested with real scan) | 1fec165 |
+| 2 | Vue UI with all core screens | Browser end-to-end flow works | ⏳ Partial (6 views created, Settings 3/7 tabs, no ApexCharts, no vuln check selector) | 1fec165 |
+| 3 | All CLI features exposed in UI | Every config section has UI | ❌ Not started | — |
+| 4 | Docker deploy + auth + persistence | `docker compose up` serves app | ❌ Not started | — |
 
 ---
 
-## 12. Constraints & Rules
+## 12. Known Issues & Technical Debt
+
+> Last updated: Phase 1+2 complete. Items below block production readiness.
+
+### Blocking Issues (must fix before Phase 3)
+
+| # | Issue | Severity | Impact | Fix |
+|---|---|---|---|---|
+| 1 | **No real scan test** | 🔴 High | SSE, report parsing, findings extraction all untested against actual `deep_eye.py` output | Run scan against `npx juice-shop`, verify SSE stream + JSON report structure + findings parse |
+| 2 | **Report JSON structure unverified** | 🔴 High | `report_store.parse_findings()` assumes fields (type/severity/url/parameter/payload/evidence) — may not match actual deep-eye JSON | Inspect real report JSON, adjust parser |
+| 3 | **`pnpm run build` broken** | 🟡 Medium | CI/CD can't build frontend; `pnpm install` triggers esbuild build script error | Add `.npmrc` with `ignore-scripts=true` or `node-linker=hoisted`; or use `vite build` directly in scripts |
+| 4 | **No tests** | 🟡 Medium | pytest + vitest configured but zero test files written | Write API smoke tests (health, config read, scan create), frontend store tests |
+
+### Partial Implementation (Phase 2 gaps, carry into Phase 3)
+
+| # | Issue | Severity | Impact |
+|---|---|---|---|
+| 5 | **Settings 3/7 tabs** | 🟡 Medium | notifications, proxy, compliance, advanced tabs missing — design spec exists in `web/design/screens/settings.md` |
+| 6 | **No vuln check selector** | 🟡 Medium | NewScan wizard has no 71-check toggle grid — design spec exists in `web/design/screens/new-scan.md` |
+| 7 | **ApexCharts not rendered** | 🟢 Low | Package installed, design specs include donut+bar, Dashboard.vue only has stat cards |
+| 8 | **No diff/retest UI** | 🟢 Low | deep-eye `--diff` and `--retest-new` have no UI surface |
+| 9 | **dist/ in git?** | 🟢 Low | Verify `.gitignore` covers `web/dist/` — built artifacts shouldn't be committed |
+
+### Infrastructure Debt
+
+| # | Issue | Severity | Impact |
+|---|---|---|---|
+| 10 | **Duplicate venvs** | 🟢 Low | `scanner/deep-eye/.venv` (Phase 0) + root `.venv` (Phase 1+2). Root is active. Old one wastes disk. |
+| 11 | **GitHub secrets not set** | 🟡 Medium | SONAR_TOKEN + CS_ACCESS_TOKEN missing → CI workflows will skip/fail |
+| 12 | **npx autoskill not run** | 🟢 Low | Interactive prompts can't be automated. Run manually if needed. |
+| 13 | **No auth on API** | 🔴 High (for deploy) | All endpoints open. Acceptable for local dev, blocker for Phase 4 deploy. |
+
+### Constraints & Rules
 
 - **Zero assumption**: every technical claim verified from source or environment
 - **deep-eye unmodified**: submodule, never edit upstream files
