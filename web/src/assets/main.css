@@ -1,0 +1,83 @@
+@import "../../design/tokens.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-bg-primary text-txt-primary font-sans antialiased;
+    background-color: var(--de-bg-primary);
+    color: var(--de-text-primary);
+    font-family: Inter, system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgba(18, 24, 38, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 240, 255, 0.1);
+    border-radius: 8px;
+  }
+  .glass-hover:hover {
+    border-color: rgba(0, 240, 255, 0.25);
+    background: rgba(30, 38, 64, 0.7);
+  }
+  .neon-btn {
+    @apply px-4 py-2 rounded font-medium transition-all;
+    background: var(--de-color-accent-primary);
+    color: var(--de-text-inverse);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+  }
+  .neon-btn:hover {
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
+  }
+  .neon-btn:disabled {
+    opacity: 0.4;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .sev-badge {
+    @apply px-2 py-0.5 rounded text-xs font-bold uppercase;
+  }
+  .sev-critical { background: rgba(255, 51, 102, 0.15); color: #ff3366; border: 1px solid rgba(255, 51, 102, 0.3); }
+  .sev-high { background: rgba(255, 102, 68, 0.15); color: #ff6644; border: 1px solid rgba(255, 102, 68, 0.3); }
+  .sev-medium { background: rgba(255, 170, 0, 0.15); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+  .sev-low { background: rgba(74, 158, 255, 0.15); color: #4a9eff; border: 1px solid rgba(74, 158, 255, 0.3); }
+  .sev-info { background: rgba(107, 125, 153, 0.15); color: #6b7d99; border: 1px solid rgba(107, 125, 153, 0.3); }
+
+  .terminal {
+    @apply font-mono text-sm overflow-y-auto;
+    background: rgba(10, 14, 26, 0.9);
+    color: var(--de-color-accent-secondary);
+    line-height: 1.6;
+  }
+  .terminal::-webkit-scrollbar,
+  .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .terminal::-webkit-scrollbar-track,
+  .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+  .terminal::-webkit-scrollbar-thumb,
+  .custom-scroll::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.2); border-radius: 3px; }
+  .terminal::-webkit-scrollbar-thumb:hover,
+  .custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0, 240, 255, 0.4); }
+
+  .input-field {
+    @apply w-full px-3 py-2 rounded text-txt-primary outline-none transition-all;
+    background: rgba(26, 33, 51, 0.8);
+    border: 1px solid rgba(0, 240, 255, 0.12);
+  }
+  .input-field:focus {
+    border-color: var(--de-color-accent-primary);
+    box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.1);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 255, 136, 0.3); }
+  50% { box-shadow: 0 0 16px rgba(0, 255, 136, 0.6); }
+}
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
