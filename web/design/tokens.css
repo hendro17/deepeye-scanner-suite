@@ -1,0 +1,213 @@
+/* ============================================================================
+   DeepEye Scanner Suite — Design Tokens
+   Dark futuristic / SOC (Security Operations Center) theme
+   ============================================================================
+   All values are CSS custom properties on :root.
+   Import this file before any component CSS.
+   Consume via: var(--de-color-accent-primary)
+   ========================================================================== */
+
+:root {
+  /* ---- Color: Backgrounds ---- */
+  --de-bg-primary:        #0a0e1a;  /* deep navy/black — app canvas          */
+  --de-bg-secondary:       #121826;  /* panels, sidebars                      */
+  --de-bg-tertiary:        #1a2133;  /* nested cards, inputs                   */
+  --de-bg-elevated:        #1e2640;  /* modals, dropdowns, popovers            */
+  --de-bg-scrim:           rgba(10, 14, 26, 0.72);  /* modal backdrop         */
+
+  /* ---- Color: Accents (neon) ---- */
+  --de-color-accent-primary:    #00f0ff;  /* neon cyan — primary actions   */
+  --de-color-accent-secondary:  #00ff88;  /* neon green — success/active    */
+  --de-color-accent-primary-rgb:   0, 240, 255;
+  --de-color-accent-secondary-rgb: 0, 255, 136;
+
+  /* ---- Color: Semantic ---- */
+  --de-color-warning:  #ffaa00;  /* amber  — warnings, medium severity  */
+  --de-color-danger:   #ff3366;  /* red    — errors, critical severity   */
+  --de-color-info:     #4a9eff;  /* blue   — info, low severity           */
+  --de-color-success:  #00ff88;  /* green  — success (alias of secondary)  */
+
+  /* ---- Color: Severity (finding badges) ---- */
+  --de-severity-critical: #ff3366;
+  --de-severity-high:     #ff6644;
+  --de-severity-medium:   #ffaa00;
+  --de-severity-low:      #4a9eff;
+  --de-severity-info:     #6b7d99;
+
+  /* ---- Color: Text ---- */
+  --de-text-primary:    #e0e6ed;  /* headings, body, default text         */
+  --de-text-secondary:  #8b95a7;  /* labels, captions, meta                */
+  --de-text-tertiary:   #5a6577;  /* placeholders, disabled                 */
+  --de-text-inverse:    #0a0e1a;  /* text on neon-accent buttons          */
+  --de-text-link:       #00f0ff;  /* hyperlinks                            */
+
+  /* ---- Color: Borders ---- */
+  --de-border-subtle:   rgba(0, 240, 255, 0.08);
+  --de-border-default:  rgba(0, 240, 255, 0.12);
+  --de-border-strong:   rgba(0, 240, 255, 0.25);
+  --de-border-separator: rgba(255, 255, 255, 0.06);
+
+  /* ---- Glassmorphism ---- */
+  --de-glass-bg:          rgba(18, 24, 38, 0.70);
+  --de-glass-bg-hover:    rgba(26, 33, 51, 0.80);
+  --de-glass-blur:        12px;
+  --de-glass-blur-heavy:  20px;
+  --de-glass-border:      1px solid rgba(0, 240, 255, 0.10);
+  --de-glass-border-hover: 1px solid rgba(0, 240, 255, 0.25);
+  --de-glass-shadow:      0 4px 24px rgba(0, 0, 0, 0.40);
+  --de-glass-shadow-lg:   0 8px 48px rgba(0, 0, 0, 0.55);
+
+  /* ---- Neon Glow ---- */
+  --de-glow-accent:       0 0 12px rgba(0, 240, 255, 0.40);
+  --de-glow-accent-strong: 0 0 20px rgba(0, 240, 255, 0.60), 0 0 4px rgba(0, 240, 255, 0.80);
+  --de-glow-success:      0 0 12px rgba(0, 255, 136, 0.40);
+  --de-glow-danger:       0 0 12px rgba(255, 51, 102, 0.45);
+  --de-glow-warning:      0 0 12px rgba(255, 170, 0, 0.40);
+  --de-glow-inset:        inset 0 0 8px rgba(0, 240, 255, 0.06);
+
+  /* ---- Typography: Font Families ---- */
+  --de-font-ui:       'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --de-font-mono:     'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---- Typography: Font Sizes ---- */
+  --de-text-xs:    0.6875rem;   /* 11px */
+  --de-text-sm:    0.8125rem;   /* 13px */
+  --de-text-base:  0.875rem;   /* 14px — base body                  */
+  --de-text-md:    1rem;        /* 16px */
+  --de-text-lg:    1.125rem;    /* 18px */
+  --de-text-xl:    1.25rem;     /* 20px */
+  --de-text-2xl:   1.5rem;      /* 24px */
+  --de-text-3xl:   1.875rem;    /* 30px */
+  --de-text-4xl:   2.25rem;     /* 36px */
+
+  /* ---- Typography: Font Weights ---- */
+  --de-font-regular:    400;
+  --de-font-medium:    500;
+  --de-font-semibold:  600;
+  --de-font-bold:      700;
+
+  /* ---- Typography: Line Heights ---- */
+  --de-leading-tight:   1.25;
+  --de-leading-normal:  1.5;
+  --de-leading-relaxed: 1.75;
+
+  /* ---- Typography: Letter Spacing ---- */
+  --de-tracking-tight:    -0.01em;
+  --de-tracking-normal:   0;
+  --de-tracking-wide:     0.025em;
+  --de-tracking-wider:    0.05em;
+  --de-tracking-widest:   0.1em;  /* uppercase labels */
+
+  /* ---- Spacing Scale ---- */
+  --de-space-0:    0;
+  --de-space-1:    4px;
+  --de-space-2:    8px;
+  --de-space-3:    12px;
+  --de-space-4:    16px;
+  --de-space-5:    24px;
+  --de-space-6:    32px;
+  --de-space-7:    48px;
+  --de-space-8:    64px;
+
+  /* ---- Border Radius ---- */
+  --de-radius-sm:    4px;    /* inputs, badges, small buttons     */
+  --de-radius-md:    6px;    /* medium buttons, dropdown items     */
+  --de-radius-lg:    8px;    /* cards, panels                      */
+  --de-radius-xl:    12px;   /* modals, large containers           */
+  --de-radius-full:  9999px; /* pills, toggles, avatars            */
+
+  /* ---- Sizing: Component dimensions ---- */
+  --de-sidebar-width:        260px;
+  --de-sidebar-collapsed:    64px;
+  --de-topbar-height:        56px;
+  --de-content-max-width:    1600px;
+  --de-card-min-height:      120px;
+
+  /* ---- Buttons ---- */
+  --de-btn-height-sm:    28px;
+  --de-btn-height-md:    36px;
+  --de-btn-height-lg:    44px;
+  --de-btn-padding-x:    16px;
+  --de-btn-padding-x-sm: 12px;
+  --de-btn-gap:          8px;
+
+  /* ---- Inputs ---- */
+  --de-input-height:     36px;
+  --de-input-padding-x:  12px;
+  --de-input-padding-y:  8px;
+
+  /* ---- Badges ---- */
+  --de-badge-height:     20px;
+  --de-badge-padding-x:  8px;
+
+  /* ---- Toggles ---- */
+  --de-toggle-width:     40px;
+  --de-toggle-height:    22px;
+  --de-toggle-knob:       16px;
+
+  /* ---- Transitions ---- */
+  --de-transition-fast:    120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --de-transition-base:    200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --de-transition-slow:    320ms cubic-bezier(0.4, 0, 0.2, 1);
+  --de-transition-glow:    200ms ease-out;
+
+  /* ---- Z-Index Scale ---- */
+  --de-z-base:       0;
+  --de-z-dropdown:   100;
+  --de-z-sticky:     200;
+  --de-z-overlay:    300;
+  --de-z-modal:      1000;
+  --de-z-toast:      2000;
+  --de-z-tooltip:    3000;
+
+  /* ---- Shadows ---- */
+  --de-shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.30);
+  --de-shadow-md:    0 4px 12px rgba(0, 0, 0, 0.35);
+  --de-shadow-lg:    0 8px 24px rgba(0, 0, 0, 0.45);
+  --de-shadow-xl:    0 16px 48px rgba(0, 0, 0, 0.55);
+  --de-shadow-glow:   0 0 16px rgba(0, 240, 255, 0.25);
+
+  /* ---- Charts (ApexCharts) ---- */
+  --de-chart-bg:           transparent;
+  --de-chart-grid-color:   rgba(255, 255, 255, 0.05);
+  --de-chart-text-color:   #8b95a7;
+  --de-chart-tooltip-bg:   rgba(18, 24, 38, 0.95);
+
+  /* ---- Terminal Console ---- */
+  --de-terminal-bg:        rgba(8, 12, 22, 0.95);
+  --de-terminal-text:      #c8d4e0;
+  --de-terminal-line-height: 1.6;
+  --de-terminal-font-size: 0.8125rem;  /* 13px */
+  --de-terminal-padding:   16px;
+
+  /* ---- Focus Ring ---- */
+  --de-focus-ring:  0 0 0 2px rgba(0, 240, 255, 0.50);
+  --de-focus-ring-danger: 0 0 0 2px rgba(255, 51, 102, 0.50);
+}
+
+/* ---- Font Faces (self-host or CDN) ---- */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/Inter.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono.woff2') format('woff2');
+}
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --de-transition-fast:  0ms;
+    --de-transition-base:  0ms;
+    --de-transition-slow:  0ms;
+    --de-transition-glow:  0ms;
+  }
+}

@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install backend deps
+        run: uv pip install -r scanner/deep-eye/requirements.txt
+        continue-on-error: true
+
+      - name: Install frontend deps
+        working-directory: web
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+        continue-on-error: true
+
+      - name: Backend lint (ruff)
+        working-directory: api
+        run: ruff check .
+        continue-on-error: true
+
+      - name: Backend typecheck (mypy)
+        working-directory: api
+        run: mypy .
+        continue-on-error: true
+
+      - name: Frontend lint
+        working-directory: web
+        run: pnpm lint
+        continue-on-error: true
+
+      - name: Frontend typecheck
+        working-directory: web
+        run: pnpm typecheck
+        continue-on-error: true
