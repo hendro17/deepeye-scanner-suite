@@ -1,0 +1,3 @@
+[submodule "scanner/deep-eye"]
+	path = scanner/deep-eye
+	url = https://github.com/zakirkun/deep-eye

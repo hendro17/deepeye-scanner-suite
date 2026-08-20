@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.deep-venv/
+*.db
+
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Scanner artifacts
+scanner/deep-eye/reports/
+scanner/deep-eye/logs/
+scanner/deep-eye/data/
+
+# Env
+.env
+.env.local
+
+# OS
+Thumbs.db
