@@ -26,3 +26,18 @@ scanner/deep-eye/data/
 
 # OS
 Thumbs.db
+
+# Coverage & Tests
+.coverage
+coverage.xml
+htmlcov/
+coverage/
+
+# Build artifacts
+*.tsbuildinfo
+web/vite.config.d.ts
+web/vite.config.js
+
+# Data
+data/
+reports/

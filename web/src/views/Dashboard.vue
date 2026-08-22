@@ -15,6 +15,11 @@ const sevColors: Record<string, string> = {
   critical: "#ff3366", high: "#ff6644", medium: "#ffaa00", low: "#4a9eff", info: "#6b7d99",
 };
 
+const statusBadge: Record<string, string> = {
+  running: "sev-low", completed: "sev-medium", failed: "sev-critical",
+  stopped: "sev-info", pending: "sev-info",
+};
+
 onMounted(() => store.fetchScans());
 </script>
 
@@ -63,10 +68,7 @@ onMounted(() => store.fetchScans());
             <td class="py-2 font-mono text-neon-cyan">#{{ scan.id }}</td>
             <td class="py-2 truncate max-w-xs">{{ scan.target }}</td>
             <td class="py-2">
-              <span :class="['sev-badge', {
-                running: 'sev-low', completed: 'sev-medium', failed: 'sev-critical',
-                stopped: 'sev-info', pending: 'sev-info'
-              }[scan.status]]">{{ scan.status }}</span>
+              <span :class="['sev-badge', statusBadge[scan.status]]">{{ scan.status }}</span>
             </td>
             <td class="py-2 text-txt-secondary">{{ scan.created_at?.slice(0, 19) }}</td>
             <td class="py-2">

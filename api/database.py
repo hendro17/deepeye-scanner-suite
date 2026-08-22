@@ -46,11 +46,17 @@ def init_db():
             cve_refs    TEXT,
             ai_summary  TEXT,
             false_positive INTEGER,
+            description TEXT,
+            screenshot  TEXT,
             FOREIGN KEY (job_id) REFERENCES jobs(id)
         );
         CREATE INDEX IF NOT EXISTS idx_findings_job ON findings(job_id);
         CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
     """)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(findings)").fetchall()}
+    for col, coltype in [("description", "TEXT"), ("screenshot", "TEXT")]:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE findings ADD COLUMN {col} {coltype}")
     conn.close()
 
 

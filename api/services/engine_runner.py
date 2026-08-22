@@ -65,21 +65,20 @@ def start_scan(job_id: int, job_args: dict) -> int:
         exit_code = process.returncode
         active_scans[job_id]["done"] = True
         active_scans[job_id]["exit_code"] = exit_code
-        q.put(("done", None, exit_code))
-
-        _finalize_scan(job_id, exit_code, before)
+        report_path = _finalize_scan(job_id, exit_code, before)
+        q.put(("done", report_path, exit_code))
 
     threading.Thread(target=reader, daemon=True).start()
     return process.pid
 
 
-def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> None:
+def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
     ended = datetime.now().isoformat()
     report_path = None
     if REPORTS_DIR.exists():
         after = {f.name for f in REPORTS_DIR.iterdir()}
         new_files = after - before
-        json_files = [f for f in new_files if f.endswith(".json")]
+        json_files = [f for f in new_files if f.endswith(".json") and not f.endswith(".sarif.json")]
         if json_files:
             report_path = str(REPORTS_DIR / sorted(json_files)[-1])
     conn = get_db()
@@ -91,6 +90,7 @@ def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> None:
     conn.close()
     if report_path:
         report_store.parse_findings(job_id, Path(report_path))
+    return report_path
 
 
 def stop_scan(job_id: int) -> bool:
@@ -130,7 +130,7 @@ async def stream_scan(job_id: int):
                 payload = json.dumps({"line": data, "timestamp": extra})
                 yield f"event: log\ndata: {payload}\n\n"
             elif event_type == "done":
-                payload = json.dumps({"exit_code": extra})
+                payload = json.dumps({"exit_code": extra, "report_path": data})
                 yield f"event: done\ndata: {payload}\n\n"
                 break
         except queue.Empty:

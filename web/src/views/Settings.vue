@@ -8,7 +8,7 @@ const activeTab = ref("providers");
 const saving = ref(false);
 const savedMsg = ref("");
 
-const providerNames = ["openai", "claude", "grok", "gemini", "ollama", "openrouter", "groq", "mistral", "litellm", "lmstudio", "orcarouter", "requesty"];
+const providerNames = ["openai", "claude", "grok", "gemini", "ollama", "openrouter", "groq", "mistral", "litellm", "lmstudio", "orcarouter"];
 
 onMounted(async () => {
   const [cfgRes, provRes] = await Promise.all([api.config.get(), api.providers.status()]);

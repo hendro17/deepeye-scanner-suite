@@ -98,7 +98,7 @@ ai_providers:
     temperature: float
     max_tokens: int
     timeout: float
-  # ... same shape for: grok, gemini, groq, mistral, openrouter, orcarouter, requesty, litellm, lmstudio
+  # ... same shape for: grok, gemini, groq, mistral, openrouter, orcarouter, litellm, lmstudio
   ollama:
     enabled: bool
     base_url: str         # default http://localhost:11434
@@ -149,9 +149,29 @@ vulnerability_scanner:
 ### 2.4 Payload Generation
 
 ```yaml
-payload_generation:
-  use_ai: bool
+vulnerability_scanner:
+  payload_generation:
+    use_ai: bool
+    context_aware: bool
+    cve_database: bool
+    custom_wordlists: bool
+    use_payload_obfuscation: bool   # enable obfuscation for WAF bypass
+```
+
+### 2.4b Payload Obfuscation
+
+```yaml
+payload_obfuscation:
+  enabled: bool
   techniques:
+    - base64_encoding
+    - url_encoding
+    - unicode_encoding
+    - hex_encoding
+    - case_manipulation
+    - comment_insertion
+    - concatenation
+    - null_byte_injection
     - double_encoding
     - character_substitution
   waf_bypass_mode: bool
@@ -271,9 +291,10 @@ logging:
 
 ```yaml
 database:
-  sqlite:
-    path: str               # data/deep_eye.db
-    auto_cleanup_days: int   # 30
+  enabled: bool
+  type: str               # "sqlite"
+  path: str               # data/deep_eye.db
+  auto_cleanup_days: int   # 30
 ```
 
 ### 2.17 Rate Limiting
@@ -293,8 +314,8 @@ advanced:
   screenshot_enabled: bool
   enable_browser_use_ai: bool    # default false
   browser_timeout: int          # 120
-  page_timeout: int             # 10
-  nav_timeout: int              # 10
+  browser_page_timeout: int     # 10
+  browser_navigation_timeout: int  # 10
 ```
 
 ### 2.19 Scope
@@ -336,9 +357,9 @@ experimental:
   cve_database_path: str        # data/cve_intelligence.db
   auto_update_cve_db: bool
   cve_lookback_days: int        # 365
-  cve_live_lookup:
-    nvd_api_key: str
-    github_token: str
+  cve_live_lookup: bool         # false; public NVD + GitHub live lookup
+  nvd_api_key: str              # optional, higher rate limit
+  github_token: str             # optional, for POC search
 ```
 
 ### 2.23 Notifications
@@ -360,18 +381,28 @@ notifications:
 ```yaml
 secrets_scanner:
   enabled: bool
-  patterns:
-    - aws
-    - gcp
-    - azure
-    - github
-    - gitlab
-    - slack
-    - stripe
-    - twilio
-  entropy:
-    detection: bool
-    min_entropy: float         # 4.5
+  scan_response_body: bool
+  scan_response_headers: bool
+  scan_javascript_files: bool
+  check_git_exposure: bool
+  enable_entropy_detection: bool   # detect high-entropy strings
+  min_entropy: float               # 4.5 (0-8, higher = more random)
+  min_length: int                  # 20
+  enabled_patterns:                # specific pattern names (see config.example.yaml for full list)
+    - aws_access_key
+    - aws_secret_key
+    - gcp_api_key
+    - azure_storage_key
+    - github_token
+    - gitlab_token
+    - slack_token
+    - stripe_api_key
+    - twilio_api_key
+    - # ... (30+ patterns in config.example.yaml)
+  severity_mapping: dict           # per-pattern severity override + default
+  whitelist:
+    emails: list
+    domains: list
 ```
 
 ---
@@ -387,14 +418,14 @@ secrets_scanner:
 | GET | `/api/scans/{id}` | — | `{id, target, args, status, pid, report_path, started_at, ended_at, findings_summary}` | Detail |
 | POST | `/api/scans/{id}/start` | — | `{status: "running", pid}` | Launches subprocess |
 | POST | `/api/scans/{id}/stop` | — | `{status: "stopped"}` | SIGTERM → SIGKILL |
-| GET | `/api/scans/{id}/stream` | — | SSE stream | `text/event-stream`; each event: `{type: "log"|"progress"|"done"|"error", data: str}` |
+| GET | `/api/scans/{id}/stream` | — | SSE stream | `text/event-stream`; each event: `{type: "log"|"done"|"error", data: str}` |
 | GET | `/api/scans/{id}/findings` | — | `{vulnerabilities: [Finding], urls_crawled, duration}` | Parsed from report JSON |
 | GET | `/api/reports?scan_id={id}` | — | `[{filename, format, size, created_at}]` | List artifacts |
 | GET | `/api/reports/{filename}` | — | file blob | Download |
 | GET | `/api/config` | — | `{config_yaml, masked: true}` | api_key values replaced with `sk-••••` |
 | PUT | `/api/config` | `{config_yaml}` | `{success: true}` | Write full config.yaml |
 | GET | `/api/providers/status` | — | `[{name, enabled, configured, reachable}]` | Per provider |
-| POST | `/api/providers/test/{name}` | — | `{success: bool, error?}` | Quick test call |
+| POST | `/api/providers/test/{name}` | — | `{success: bool, error?}` | **Phase 2 stub** — config-only check (api_key present = configured) |
 | POST | `/api/maintenance/update-cve` | — | `{status, pid}` | Async trigger |
 | POST | `/api/maintenance/build-rag` | — | `{status, pid}` | Async trigger |
 | GET | `/api/health` | — | `{status: "ok"}` | Health check |
@@ -405,15 +436,14 @@ secrets_scanner:
 event: log
 data: {"line": "[INFO] Starting scan...", "timestamp": "2026-08-20T10:00:00Z"}
 
-event: progress
-data: {"urls_crawled": 15, "current_url": "http://example.com/admin"}
-
 event: done
 data: {"exit_code": 0, "report_path": "reports/scan_20260820_100000.html"}
 
 event: error
 data: {"message": "Process killed", "exit_code": -15}
 ```
+
+> **Note**: No `progress` event — deep-eye engine uses Rich console live display (in-place progress bars/spinners), not discrete stdout events. Parsing progress would require modifying the engine (out of scope §8). `done` event includes `report_path` (engine runner finds the new report file).
 
 ### 3.3 Engine Runner Specification
 
@@ -469,7 +499,7 @@ config_service.py:
 |---|---|---|---|
 | Dashboard | `/` | SeverityDonut (ApexCharts), ScanHistoryBar, RecentScansList, StatCards | `GET /api/scans` |
 | NewScan | `/scan/new` | TargetInput, ScopeNLInput, ChecksToggles (60+), ThreadsDepthSliders, FormatSelector, AuthorizationCheckbox, StartButton | `POST /api/scans` → `POST /api/scans/{id}/start` |
-| ScanLive | `/scan/:id/live` | TerminalConsole (`<pre>` + auto-scroll), StopButton, ProgressInfo | `GET /api/scans/{id}/stream` (SSE) |
+| ScanLive | `/scan/:id/live` | TerminalConsole (`<pre>` + auto-scroll), StopButton | `GET /api/scans/{id}/stream` (SSE) |
 | Findings | `/scan/:id/findings` | FindingsTable, SeverityFilter, TypeFilter, SearchBar, FindingDetail (expandable) | `GET /api/scans/{id}/findings` |
 | Reports | `/scan/:id/reports` | ReportList, DownloadButtons, FormatBadges | `GET /api/reports?scan_id=` |
 | Settings | `/settings` | ProviderForms (incl. Custom), ScannerSettings, NotificationSettings, ProxyToggle, ComplianceToggle, AdvancedToggle, MaintenanceButtons | `GET/PUT /api/config`, `GET /api/providers/status` |
@@ -492,12 +522,13 @@ config_service.py:
 ```
 <ProviderSettings>
   - Provider selector (dropdown): OpenAI, Claude, Grok, ..., + Custom
-  - Standard fields: api_key (password input, masked), model (text), temperature (slider), max_tokens (number), timeout (number)
+  - Standard fields: api_key (password input, masked), model (text)
   - Custom mode adds: base_url (text input, placeholder "https://your-api.com/v1")
-  - "Test Connection" button → POST /api/providers/test/{name}
   - "Save" → PUT /api/config with updated provider section
-  - Status badge: ✓ Configured / ✗ Missing key / ● Reachable / ○ Unreachable
+  - Status badge: ✓ Configured / ✗ Missing key
 ```
+
+> **Phase 2 (descoped)**: temperature slider, max_tokens, timeout fields, "Test Connection" button, ● Reachable / ○ Unreachable badges. Current UI uses minimal form (api_key + model + base_url + enabled).
 
 ---
 
@@ -541,6 +572,8 @@ CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
 
 ## 6. Docker Compose Spec
 
+> **Phase 2 (descoped)** — Docker deployment deferred. Use `scripts/dev.sh` for local development.
+
 ```yaml
 # docker-compose.yml (structure, not final)
 services:
@@ -573,15 +606,13 @@ volumes:
 ```bash
 #!/bin/bash
 # scripts/dev.sh
-# Starts: juice-shop (test target), FastAPI backend, Vue frontend
+# Starts: FastAPI backend + Vue frontend
+# juice-shop is OPTIONAL — run 'npx juice-shop' in a separate terminal if needed
 
-# 1. Test target
-npx juice-shop &
+# 1. Backend
+.venv/bin/python -m uvicorn api.main:app --reload --port 8000 &
 
-# 2. Backend
-cd api && uv run uvicorn main:app --reload --port 8000 &
-
-# 3. Frontend
+# 2. Frontend
 cd web && pnpm install && pnpm dev
 
 # Trap cleanup

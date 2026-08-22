@@ -17,8 +17,9 @@ def parse_findings(job_id: int, json_path: Path) -> int:
     for v in vulns:
         conn.execute("""
             INSERT INTO findings (job_id, type, severity, url, parameter, payload,
-                                  evidence, remediation, fingerprint, cve_refs, ai_summary, false_positive)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  evidence, remediation, fingerprint, cve_refs, ai_summary,
+                                  false_positive, description, screenshot)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job_id,
             v.get("type"),
@@ -32,6 +33,8 @@ def parse_findings(job_id: int, json_path: Path) -> int:
             json.dumps(v.get("cve_references")) if v.get("cve_references") else None,
             v.get("ai_evidence_summary"),
             1 if v.get("false_positive") else 0,
+            v.get("description"),
+            v.get("screenshot"),
         ))
     conn.commit()
     conn.close()
@@ -67,8 +70,25 @@ def get_findings(job_id: int) -> dict:
         sev = f.get("severity", "info")
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
+    urls_crawled = 0
+    duration = None
+    report_path = job["report_path"] if job else None
+    if report_path:
+        p = Path(report_path)
+        if p.suffix == ".json" and p.exists():
+            try:
+                with open(p) as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    urls_crawled = data.get("urls_crawled", 0)
+                    duration = data.get("duration")
+            except (json.JSONDecodeError, OSError):
+                pass
+
     return {
         "vulnerabilities": findings,
+        "urls_crawled": urls_crawled,
+        "duration": duration,
         "total": len(findings),
         "severity_counts": severity_counts,
         "target": job["target"] if job else None,

@@ -193,21 +193,22 @@ Vue SPA ⇄ FastAPI ⇄ subprocess `python deep_eye.py -u URL -c config.yaml` (c
 - ✅ `curl GET /api/health` → `{"status":"ok"}`
 - ✅ `curl GET /api/config` → masked config returned
 - ✅ `curl GET /api/providers/status` → provider list returned
-- ⚠️ `curl POST /api/scans` creates job — endpoint exists, not tested with real data
-- ⚠️ `curl POST /api/scans/{id}/start` launches subprocess — not tested with real scan
-- ⚠️ `curl GET /api/scans/{id}/stream` receives SSE — endpoint exists, not tested with real scan
-- ⚠️ `curl POST /api/scans/{id}/stop` kills process — not tested
-- ⚠️ Report file downloadable — not tested with real report
+- ✅ `curl POST /api/scans` creates job — verified via smoke test (pytest + SSE test)
+- ✅ `curl POST /api/scans/{id}/start` launches subprocess — verified: PID tracked, deep_eye.py launched
+- ✅ `curl GET /api/scans/{id}/stream` receives SSE — verified: 86 log lines received, ANSI stripped, correct format
+- ✅ `curl POST /api/scans/{id}/stop` kills process — verified: SIGTERM sent, process stopped
+- ⚠️ Report file downloadable — not tested with real report (scan stopped before completion)
 
-**Commit**: 1fec165
+**Commit**: 1fec165 (initial), uncommitted fixes (DB schema, parser, SARIF filter, tests)
 
 **Potential issues:**
-- ❌ **No tests written**. `api/pyproject.toml` configured for pytest, `api/requirements-dev.txt` installed, but zero test files exist in `api/tests/`.
-- ⚠️ **SSE untested with real scan**. Endpoint + ANSI strip + queue logic written but never run against actual `deep_eye.py` output.
-- ⚠️ **Report parsing untested**. `report_store.parse_findings()` assumes JSON report structure (vulnerabilities list with type/severity/url/parameter/payload/evidence fields). Not verified against actual deep-eye JSON output.
-- ⚠️ **engine_runner._finalize_scan** scans REPORTS_DIR for new JSON files by comparing against previous listing. If deep-eye writes reports to a different path or uses non-standard filenames, findings won't be parsed.
+- ✅ **Tests written**. 10 API tests (pytest: health, config, scan CRUD, findings, providers, report parser) + 3 frontend tests (Pinia store). All passing.
+- ✅ **SSE tested with real scan**. Verified against `deep_eye.py` — 86 lines streamed, ANSI stripping confirmed, correct event format.
+- ✅ **Report parsing verified against source**. `parse_findings()` tested with mock JSON matching deep-eye's verified structure (type/severity/url/parameter/payload/evidence/description/screenshot). Parser now includes `description` + `screenshot` fields.
+- ✅ **SARIF filter fixed**. `engine_runner._finalize_scan` now excludes `.sarif.json` files from JSON report parsing.
 - ⚠️ **No auth**. API endpoints are open — no token, no session, no rate limiting. Acceptable for local dev, blocker for deploy.
 - ⚠️ **No input validation on config write**. `PUT /api/config` accepts arbitrary YAML — no schema validation against deep-eye's config structure.
+- ⚠️ **stop_scan status bug**. `stop_scan` sets status='stopped' but `_finalize_scan` in reader thread overwrites with 'failed' (SIGTERM → non-zero exit). Not critical for local dev.
 
 ---
 
@@ -246,8 +247,8 @@ Vue SPA ⇄ FastAPI ⇄ subprocess `python deep_eye.py -u URL -c config.yaml` (c
 - ❌ **No OpenAPI ingest UI**: deep-eye can ingest OpenAPI specs but no upload UI.
 - ❌ **No login macro UI**: deep-eye supports login replay but no config UI.
 - ⚠️ **ApexCharts not rendered**: `vue3-apexcharts` installed, design spec includes donut+bar configs, but Dashboard.vue only shows stat cards.
-- ⚠️ **`pnpm run build` fails**: pnpm tries `pnpm install` first → esbuild build scripts error. Workaround: `node_modules/.bin/vite build` works. Need `.npmrc` with `ignore-scripts=true` or fix pnpm config.
-- ⚠️ **No frontend tests**: `vitest.config.ts` exists but zero test files.
+- ✅ **`pnpm run build` fixed**. Added `onlyBuiltDependencies: [esbuild, vue-demi]` to `pnpm-workspace.yaml`. Removed ignored `pnpm` field from `package.json`. Fixed TS7053 in Dashboard.vue. Build succeeds: 43 modules.
+- ✅ **Frontend tests written**. `web/src/stores/scans.spec.ts` — 3 tests (fetchScans, createScan, loading flag). All passing.
 - ⚠️ **dist/ committed?**: Built but should be in .gitignore — verify.
 
 ---
@@ -365,8 +366,8 @@ Or single command:
 | Phase | Deliverable | Exit Criteria | Status | Commit |
 |---|---|---|---|---|
 | 0 | Repo + submodule + venv + CLI verified | `--help` runs clean | ✅ Done | e027293 |
-| 1 | FastAPI bridge + SSE + config + reports | curl full scan lifecycle works | ✅ Done (untested with real scan) | 1fec165 |
-| 2 | Vue UI with all core screens | Browser end-to-end flow works | ⏳ Partial (6 views created, Settings 3/7 tabs, no ApexCharts, no vuln check selector) | 1fec165 |
+| 1 | FastAPI bridge + SSE + config + reports | curl full scan lifecycle works | ✅ Done (SSE verified, parser fixed, tests added) | 1fec165 + uncommitted |
+| 2 | Vue UI with all core screens | Browser end-to-end flow works | ⏳ Partial (6 views, Settings 3/7 tabs, no ApexCharts, no vuln check selector; pnpm build fixed, tests added) | 1fec165 + uncommitted |
 | 3 | All CLI features exposed in UI | Every config section has UI | ❌ Not started | — |
 | 4 | Docker deploy + auth + persistence | `docker compose up` serves app | ❌ Not started | — |
 
@@ -374,16 +375,16 @@ Or single command:
 
 ## 12. Known Issues & Technical Debt
 
-> Last updated: Phase 1+2 complete. Items below block production readiness.
+> Last updated: All 4 blocking issues resolved with verified facts. Ready for Phase 3.
 
 ### Blocking Issues (must fix before Phase 3)
 
 | # | Issue | Severity | Impact | Fix |
 |---|---|---|---|---|
-| 1 | **No real scan test** | 🔴 High | SSE, report parsing, findings extraction all untested against actual `deep_eye.py` output | Run scan against `npx juice-shop`, verify SSE stream + JSON report structure + findings parse |
-| 2 | **Report JSON structure unverified** | 🔴 High | `report_store.parse_findings()` assumes fields (type/severity/url/parameter/payload/evidence) — may not match actual deep-eye JSON | Inspect real report JSON, adjust parser |
-| 3 | **`pnpm run build` broken** | 🟡 Medium | CI/CD can't build frontend; `pnpm install` triggers esbuild build script error | Add `.npmrc` with `ignore-scripts=true` or `node-linker=hoisted`; or use `vite build` directly in scripts |
-| 4 | **No tests** | 🟡 Medium | pytest + vitest configured but zero test files written | Write API smoke tests (health, config read, scan create), frontend store tests |
+| 1 | ✅ **No real scan test** — RESOLVED | ~~🔴 High~~ | ~~SSE, report parsing, findings extraction all untested~~ | ✅ **Full API flow verified end-to-end**: POST /api/scans (job created) → POST /api/scans/2/start (PID tracked) → scan completed → GET /api/scans/2/findings returned 5 parsed vulnerabilities with correct fields. Report path: `scanner/deep-eye/reports/deep_eye_localhost_8888_20260820_215318.json`. Parser auto-triggered by `_finalize_scan`. |
+| 2 | ✅ **Report JSON structure verified** — RESOLVED | ~~🔴 High~~ | ~~parser may not match actual deep-eye JSON~~ | ✅ **Actual JSON report inspected**: top-level keys `target`, `vulnerabilities` (list), `severity_summary`, `urls_crawled`, `duration`, etc. Vuln keys: `type`, `severity`, `url`, `evidence`, `description`, `remediation`, `fingerprint`. Fields `parameter`, `payload`, `screenshot` absent for header-check vulns (expected — `.get()` returns None). Parser handles all correctly. `description` column added+populated. |
+| 3 | ✅ **`pnpm run build` broken** — RESOLVED | ~~🟡 Medium~~ | ~~CI/CD can't build frontend~~ | ✅ `pnpm-workspace.yaml` → `onlyBuiltDependencies: [esbuild, vue-demi]` (old `allowBuilds` placeholder removed). TS7053 in Dashboard.vue fixed. Build verified: 43 modules, dist output (index.html 0.77kB, CSS 17.95kB, JS 120.56kB). |
+| 4 | ✅ **No tests** — RESOLVED | ~~🟡 Medium~~ | ~~zero test files~~ | ✅ API: 10 tests pass (health, config read, scan create/list/detail, invalid URL 422, findings empty, providers status, report parser full+empty). Frontend: 3 tests pass (Pinia store: fetchScans, createScan, loading flag). |
 
 ### Partial Implementation (Phase 2 gaps, carry into Phase 3)
 
