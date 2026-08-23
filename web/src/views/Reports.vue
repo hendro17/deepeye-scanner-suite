@@ -15,7 +15,7 @@ const formatColors: Record<string, string> = {
 
 onMounted(async () => {
   try {
-    reports.value = await api.reports.list(scanId);
+    reports.value = await api.reports.list();
   } finally {
     loading.value = false;
   }

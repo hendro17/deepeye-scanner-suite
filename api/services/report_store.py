@@ -41,7 +41,7 @@ def parse_findings(job_id: int, json_path: Path) -> int:
     return len(vulns)
 
 
-def list_reports(scan_id: int | None = None) -> list[dict]:
+def list_reports() -> list[dict]:
     if not REPORTS_DIR.exists():
         return []
     files = []

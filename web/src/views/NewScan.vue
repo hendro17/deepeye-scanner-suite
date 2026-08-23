@@ -52,33 +52,33 @@ async function submit() {
     <div class="space-y-6">
       <!-- Target -->
       <div class="glass p-5">
-        <label class="text-sm font-medium block mb-2">Target URL</label>
-        <input v-model="targetUrl" type="text" placeholder="https://example.com"
+        <label for="target-url" class="text-sm font-medium block mb-2">Target URL</label>
+        <input id="target-url" v-model="targetUrl" type="text" placeholder="https://example.com"
                class="input-field font-mono" />
       </div>
 
       <!-- Scope NL -->
       <div class="glass p-5">
-        <label class="text-sm font-medium block mb-2">Natural Language Scope <span class="text-txt-tertiary">(optional)</span></label>
-        <input v-model="scopeNl" type="text" placeholder="Focus on authentication and API endpoints"
+        <label for="scope-nl" class="text-sm font-medium block mb-2">Natural Language Scope <span class="text-txt-tertiary">(optional)</span></label>
+        <input id="scope-nl" v-model="scopeNl" type="text" placeholder="Focus on authentication and API endpoints"
                class="input-field" />
       </div>
 
       <!-- Sliders -->
       <div class="grid grid-cols-2 gap-4">
         <div class="glass p-5">
-          <label class="text-sm font-medium block mb-2">Threads: <span class="text-neon-cyan">{{ threads }}</span></label>
-          <input v-model.number="threads" type="range" min="1" max="50" class="w-full" />
+          <label for="scan-threads" class="text-sm font-medium block mb-2">Threads: <span class="text-neon-cyan">{{ threads }}</span></label>
+          <input id="scan-threads" v-model.number="threads" type="range" min="1" max="50" class="w-full" />
         </div>
         <div class="glass p-5">
-          <label class="text-sm font-medium block mb-2">Depth: <span class="text-neon-cyan">{{ depth }}</span></label>
-          <input v-model.number="depth" type="range" min="1" max="10" class="w-full" />
+          <label for="scan-depth" class="text-sm font-medium block mb-2">Depth: <span class="text-neon-cyan">{{ depth }}</span></label>
+          <input id="scan-depth" v-model.number="depth" type="range" min="1" max="10" class="w-full" />
         </div>
       </div>
 
       <!-- Formats -->
       <div class="glass p-5">
-        <label class="text-sm font-medium block mb-3">Report Formats</label>
+        <p class="text-sm font-medium block mb-3">Report Formats</p>
         <div class="flex flex-wrap gap-2">
           <button v-for="fmt in allFormats" :key="fmt"
                   @click="toggleFormat(fmt)"

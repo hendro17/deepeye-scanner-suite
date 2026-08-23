@@ -40,11 +40,11 @@
   .sev-badge {
     @apply px-2 py-0.5 rounded text-xs font-bold uppercase;
   }
-  .sev-critical { background: rgba(255, 51, 102, 0.15); color: #ff3366; border: 1px solid rgba(255, 51, 102, 0.3); }
-  .sev-high { background: rgba(255, 102, 68, 0.15); color: #ff6644; border: 1px solid rgba(255, 102, 68, 0.3); }
-  .sev-medium { background: rgba(255, 170, 0, 0.15); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
-  .sev-low { background: rgba(74, 158, 255, 0.15); color: #4a9eff; border: 1px solid rgba(74, 158, 255, 0.3); }
-  .sev-info { background: rgba(107, 125, 153, 0.15); color: #6b7d99; border: 1px solid rgba(107, 125, 153, 0.3); }
+  .sev-critical { background: rgba(255, 51, 102, 0.15); color: #ff5c85; border: 1px solid rgba(255, 51, 102, 0.3); }
+  .sev-high { background: rgba(255, 102, 68, 0.15); color: #ff8066; border: 1px solid rgba(255, 102, 68, 0.3); }
+  .sev-medium { background: rgba(255, 170, 0, 0.15); color: #ffbb4d; border: 1px solid rgba(255, 170, 0, 0.3); }
+  .sev-low { background: rgba(74, 158, 255, 0.15); color: #66b2ff; border: 1px solid rgba(74, 158, 255, 0.3); }
+  .sev-info { background: rgba(107, 125, 153, 0.15); color: #93a4bf; border: 1px solid rgba(107, 125, 153, 0.3); }
 
   .terminal {
     @apply font-mono text-sm overflow-y-auto;

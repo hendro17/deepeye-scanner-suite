@@ -80,7 +80,7 @@ def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
         new_files = after - before
         json_files = [f for f in new_files if f.endswith(".json") and not f.endswith(".sarif.json")]
         if json_files:
-            report_path = str(REPORTS_DIR / sorted(json_files)[-1])
+            report_path = str(REPORTS_DIR / max(json_files))
     conn = get_db()
     conn.execute(
         "UPDATE jobs SET status=?, report_path=?, ended_at=? WHERE id=?",

@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from urllib.parse import urlparse
 
 from fastapi import APIRouter
 from pydantic import BaseModel, field_validator
@@ -23,8 +24,8 @@ class ScanCreate(BaseModel):
     @field_validator("target_url")
     @classmethod
     def validate_url(cls, v):
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("target_url must start with http:// or https://")
+        if urlparse(v).scheme not in ("http", "https"):
+            raise ValueError("target_url must use an http or https scheme")
         return v
 
     @field_validator("depth")

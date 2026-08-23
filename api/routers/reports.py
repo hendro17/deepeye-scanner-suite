@@ -8,11 +8,11 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
 @router.get("")
-async def get_reports(scan_id: int | None = None):
-    return list_reports(scan_id)
+async def get_reports():
+    return list_reports()
 
 
-@router.get("/{filename}")
+@router.get("/{filename}", responses={404: {"description": "Report not found"}})
 async def download_report(filename: str):
     path = REPORTS_DIR / filename
     if not path.exists() or not path.is_file():

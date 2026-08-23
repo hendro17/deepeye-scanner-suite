@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from "vue";
+import { onMounted, computed } from "vue";
 import { RouterLink } from "vue-router";
 import { useScansStore } from "../stores/scans";
 

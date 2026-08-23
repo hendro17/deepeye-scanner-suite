@@ -68,24 +68,24 @@ async function buildRag() {
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="text-xs text-txt-secondary block mb-1">API Key</label>
-              <input v-model="config.ai_providers[name].api_key" type="password"
+              <label :for="'api-key-' + name" class="text-xs text-txt-secondary block mb-1">API Key</label>
+              <input :id="'api-key-' + name" v-model="config.ai_providers[name].api_key" type="password"
                      class="input-field" placeholder="sk-..." />
             </div>
             <div>
-              <label class="text-xs text-txt-secondary block mb-1">Model</label>
-              <input v-model="config.ai_providers[name].model" type="text"
+              <label :for="'provider-model-' + name" class="text-xs text-txt-secondary block mb-1">Model</label>
+              <input :id="'provider-model-' + name" v-model="config.ai_providers[name].model" type="text"
                      class="input-field" />
             </div>
             <div v-if="name === 'openai' || name === 'ollama' || name === 'openrouter'">
-              <label class="text-xs text-txt-secondary block mb-1">Base URL <span class="text-txt-tertiary">(custom OpenAI-compatible)</span></label>
-              <input v-model="config.ai_providers[name].base_url" type="text"
+              <label :for="'base-url-' + name" class="text-xs text-txt-secondary block mb-1">Base URL <span class="text-txt-tertiary">(custom OpenAI-compatible)</span></label>
+              <input :id="'base-url-' + name" v-model="config.ai_providers[name].base_url" type="text"
                      class="input-field" placeholder="https://your-api.com/v1" />
             </div>
             <div>
-              <label class="text-xs text-txt-secondary block mb-1">Enabled</label>
+              <label :for="'enabled-' + name" class="text-xs text-txt-secondary block mb-1">Enabled</label>
               <label class="flex items-center gap-2 mt-2">
-                <input v-model="config.ai_providers[name].enabled" type="checkbox" class="w-4 h-4 accent-[#00f0ff]" />
+                <input :id="'enabled-' + name" v-model="config.ai_providers[name].enabled" type="checkbox" class="w-4 h-4 accent-[#00f0ff]" />
                 <span class="text-sm">Active</span>
               </label>
             </div>
@@ -99,20 +99,20 @@ async function buildRag() {
       <div class="glass p-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="text-xs text-txt-secondary block mb-1">Default Depth (1-10)</label>
-            <input v-model.number="config.scanner.default_depth" type="number" min="1" max="10" class="input-field" />
+            <label for="default-depth" class="text-xs text-txt-secondary block mb-1">Default Depth (1-10)</label>
+            <input id="default-depth" v-model.number="config.scanner.default_depth" type="number" min="1" max="10" class="input-field" />
           </div>
           <div>
-            <label class="text-xs text-txt-secondary block mb-1">Default Threads (1-50)</label>
-            <input v-model.number="config.scanner.default_threads" type="number" min="1" max="50" class="input-field" />
+            <label for="default-threads" class="text-xs text-txt-secondary block mb-1">Default Threads (1-50)</label>
+            <input id="default-threads" v-model.number="config.scanner.default_threads" type="number" min="1" max="50" class="input-field" />
           </div>
           <div>
-            <label class="text-xs text-txt-secondary block mb-1">AI Provider</label>
-            <input v-model="config.scanner.ai_provider" type="text" class="input-field" />
+            <label for="ai-provider" class="text-xs text-txt-secondary block mb-1">AI Provider</label>
+            <input id="ai-provider" v-model="config.scanner.ai_provider" type="text" class="input-field" />
           </div>
           <div>
-            <label class="text-xs text-txt-secondary block mb-1">Proxy</label>
-            <input v-model="config.scanner.proxy" type="text" class="input-field" placeholder="http://127.0.0.1:8080" />
+            <label for="proxy" class="text-xs text-txt-secondary block mb-1">Proxy</label>
+            <input id="proxy" v-model="config.scanner.proxy" type="text" class="input-field" placeholder="http://127.0.0.1:8080" />
           </div>
         </div>
       </div>

@@ -55,8 +55,11 @@ onMounted(async () => {
     </div>
 
     <!-- Search -->
-    <input v-model="search" type="text" placeholder="Search findings..."
-           class="input-field mb-4" v-if="!loading" />
+    <template v-if="!loading">
+      <label for="findings-search" class="sr-only">Search findings</label>
+      <input id="findings-search" v-model="search" type="text" placeholder="Search findings..."
+             class="input-field mb-4" />
+    </template>
 
     <div v-if="loading" class="text-txt-secondary py-8 text-center">Loading findings...</div>
     <div v-else-if="filtered.length === 0" class="text-txt-secondary py-8 text-center">No findings match filters.</div>

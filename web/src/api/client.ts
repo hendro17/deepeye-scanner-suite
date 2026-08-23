@@ -44,8 +44,7 @@ export const api = {
   },
 
   reports: {
-    list: (scanId?: number) =>
-      request<any[]>(`/reports${scanId ? `?scan_id=${scanId}` : ""}`),
+    list: () => request<any[]>("/reports"),
     downloadUrl: (filename: string) => `${BASE}/reports/${filename}`,
   },
 
