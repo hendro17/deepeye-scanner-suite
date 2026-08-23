@@ -1,6 +1,7 @@
 {
   "name": "deepeye-scanner-web",
   "private": true,
+  "packageManager": "pnpm@11.20.0",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
