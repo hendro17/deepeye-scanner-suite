@@ -9,9 +9,10 @@ def parse_findings(job_id: int, json_path: Path) -> int:
     with open(json_path) as f:
         data = json.load(f)
 
-    vulns = data.get("vulnerabilities", [])
-    if not vulns and isinstance(data, list):
+    if isinstance(data, list):
         vulns = data
+    else:
+        vulns = data.get("vulnerabilities", [])
 
     conn = get_db()
     for v in vulns:

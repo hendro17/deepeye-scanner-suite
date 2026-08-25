@@ -41,4 +41,21 @@ describe("useScansStore", () => {
     await expect(store.fetchScans()).rejects.toThrow();
     expect(store.loading).toBe(false);
   });
+
+  it("startScan and stopScan delegate to api", async () => {
+    const store = useScansStore();
+    vi.stubGlobal("fetch", mockFetch([{ status: "running" }]));
+    const res = await store.startScan(1);
+    expect(res.status).toBe("running");
+    vi.stubGlobal("fetch", mockFetch([{ status: "stopped" }]));
+    const res2 = await store.stopScan(1);
+    expect(res2.status).toBe("stopped");
+  });
+
+  it("fetchScans handles empty", async () => {
+    vi.stubGlobal("fetch", mockFetch([[]]));
+    const store = useScansStore();
+    await store.fetchScans();
+    expect(store.scans).toEqual([]);
+  });
 });

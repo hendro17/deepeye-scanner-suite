@@ -4,12 +4,16 @@ from pathlib import Path
 from ..database import CONFIG_PATH
 
 
-def read_config(path: Path = CONFIG_PATH) -> dict:
+def read_config(path: Path | None = None) -> dict:
+    if path is None:
+        path = CONFIG_PATH
     with open(path) as f:
         return yaml.safe_load(f) or {}
 
 
-def write_config(data: dict, path: Path = CONFIG_PATH) -> None:
+def write_config(data: dict, path: Path | None = None) -> None:
+    if path is None:
+        path = CONFIG_PATH
     with open(path, "w") as f:
         yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
 
