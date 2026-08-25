@@ -7,8 +7,11 @@ from ..database import CONFIG_PATH
 def read_config(path: Path | None = None) -> dict:
     if path is None:
         path = CONFIG_PATH
-    with open(path) as f:
-        return yaml.safe_load(f) or {}
+    try:
+        with open(path) as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
 
 
 def write_config(data: dict, path: Path | None = None) -> None:
