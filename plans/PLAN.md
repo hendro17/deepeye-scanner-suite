@@ -226,12 +226,12 @@ Vue SPA ⇄ FastAPI ⇄ subprocess `python deep_eye.py -u URL -c config.yaml` (c
 **Screens:**
 | Screen | Status | Notes |
 |---|---|---|
-| Dashboard | ✅ created | Stat cards + recent scans table. **No ApexCharts** (severity donut, history bar missing). |
-| New Scan | ✅ created | Target URL, scope-nl, threads/depth sliders, 7 format toggles, authorization checkbox. **No 71 vuln check toggles.** |
+| Dashboard | ✅ complete | Stat cards + recent scans table + ApexCharts severity donut + 7-day history bar. |
+| New Scan | ✅ complete | Target URL, scope-nl, threads/depth sliders, 7 format toggles, authorization checkbox + 68-check × 15-category selector grid with presets. |
 | ScanLive | ✅ created | SSE terminal, auto-scroll, stop button, status indicator. |
 | Findings | ✅ created | Filterable table, severity filters, expandable detail rows. |
 | Reports | ✅ created | Artifact list, format badges, download buttons. |
-| Settings | ⏳ partial | **3 of 7 tabs** implemented (providers, scanner, maintenance). Missing: notifications, proxy, compliance, advanced. |
+| Settings | ✅ complete | All 7 tabs: providers, scanner, notifications, proxy, compliance, advanced, maintenance. |
 
 **Acceptance criteria:**
 - ⚠️ Full flow works in browser — not tested end-to-end with real scan
@@ -241,48 +241,54 @@ Vue SPA ⇄ FastAPI ⇄ subprocess `python deep_eye.py -u URL -c config.yaml` (c
 **Commit**: 1fec165
 
 **Potential issues:**
-- ❌ **Settings incomplete**: 3/7 tabs. Missing notifications, proxy, compliance, advanced (RAG/rate-limiting/logging/stealth). Design spec exists in `web/design/screens/settings.md` (42299 bytes) but not implemented.
-- ❌ **NewScan wizard missing vuln check selectors**: 71 checks in 15 categories designed in `web/design/screens/new-scan.md` but not implemented. Users cannot select specific checks.
-- ❌ **No diff/retest UI**: deep-eye supports `--diff` and `--retest-new` but no UI for it.
+- ✅ **Settings complete** (2026-08-26): all 7 tabs implemented per design spec (`Settings.vue` +419 lines).
+- ✅ **Vuln check selector added** (2026-08-26): 68 checks × 15 categories toggle grid + presets in `web/src/constants/checks.ts`. Spec header says 71 but its own category table sums to 68 — data exported verbatim.
+- ✅ **Diff/retest UI added** (2026-08-26): `web/src/views/CompareScans.vue` + `POST /api/scans/compare`; fingerprint-or-composite (`type|url|parameter`) matching excluding severity, mirroring engine's `core/scan_diff.py::_identity_no_sev`.
 - ❌ **No OpenAPI ingest UI**: deep-eye can ingest OpenAPI specs but no upload UI.
 - ❌ **No login macro UI**: deep-eye supports login replay but no config UI.
-- ⚠️ **ApexCharts not rendered**: `vue3-apexcharts` installed, design spec includes donut+bar configs, but Dashboard.vue only shows stat cards.
+- ✅ **ApexCharts rendered** (2026-08-26): severity donut + 7-day history bar on Dashboard; ResizeObserver guard added for jsdom tests.
 - ✅ **`pnpm run build` fixed**. Added `onlyBuiltDependencies: [esbuild, vue-demi]` to `pnpm-workspace.yaml`. Removed ignored `pnpm` field from `package.json`. Fixed TS7053 in Dashboard.vue. Build succeeds: 43 modules.
 - ✅ **Frontend tests written**. `web/src/stores/scans.spec.ts` — 3 tests (fetchScans, createScan, loading flag). All passing.
-- ⚠️ **dist/ committed?**: Built but should be in .gitignore — verify.
+- ✅ **dist/ not committed**: `.gitignore:11` covers `dist/`; `git ls-files web/dist` returns nothing (verified 2026-08-26).
 
 ---
 
-### Phase 3 — CLI Parity (All Features, Phased) ❌
+### Phase 3 — CLI Parity (All Features, Phased) ✅ (2026-08-26)
 
 Expose every deep-eye CLI feature through the UI:
 
 | Feature Group | UI Surface | Status |
 |---|---|---|
-| Diff & retest | "Compare Scans" page: select two scans → diff view (html/json/csv) | ❌ |
-| Format selector | Report download dropdown: html, pdf, json, sarif, junit, csv, xlsx | ⏳ toggle exists in NewScan, no report download dropdown |
-| Notifications | Settings: email (from/to), Slack (webhook+channel), Discord (webhook) | ❌ |
-| Auth macros | Settings: login macro upload/config, multi-role session store | ❌ |
-| Proxy toggle | Settings: mitmproxy/mitmweb toggle, proxy URL | ❌ |
+| Diff & retest | "Compare Scans" page: select two scans → diff view (html/json/csv) | ✅ server-side compare API + UI (json) |
+| Format selector | Report download dropdown: html, pdf, json, sarif, junit, csv, xlsx | ✅ Reports.vue format filter (ext-based) + per-row download |
+| Notifications | Settings: email (from/to), Slack (webhook+channel), Discord (webhook) | ✅ Notifications tab |
+| Auth macros | Settings: login macro upload/config, multi-role session store | ✅ Login Replay card in Advanced (macro_path, abort_on_fail, recheck_interval_seconds, enabled) |
+| Proxy toggle | Settings: mitmproxy/mitmweb toggle, proxy URL | ✅ Proxy tab (mitmweb, scanner proxy, TLS impersonation) |
 | CVE DB maintenance | Settings: "Update CVE DB" + "Build RAG Index" buttons | ✅ buttons exist in Settings maintenance tab |
-| Subdomain/recon toggles | New Scan wizard: enable_recon, full_scan, quick_scan, scan_subdomains | ❌ |
-| OpenAPI ingest | New Scan: upload OpenAPI spec → seed crawl targets | ❌ |
+| Subdomain/recon toggles | New Scan wizard: enable_recon, full_scan, quick_scan, scan_subdomains | ✅ wired UI→payload→ScanCreate→args_json (engine has NO CLI flags for these — config.yaml-driven knobs; inventing flags would kill argparse) |
+| OpenAPI ingest | New Scan: upload OpenAPI spec → seed crawl targets | ✅ POST /api/scans/ingest-openapi (OpenAPI v3 servers×paths + Swagger 2.0), per-target Use / apply-all-to-scope |
 | Scope-nl | New Scan: natural language scope input field | ✅ input exists in NewScan |
-| Compliance toggle | Settings: enable, select frameworks (PCI-DSS, SOC2, ISO 27001) | ❌ |
-| Templates browser | Settings: list YAML templates, tag filters | ❌ |
-| Login replay | Settings: macro_path, abort_on_fail, recheck_interval | ❌ |
-| Secrets scanner | New Scan: toggle, pattern selection | ❌ |
-| Rate limiting | Settings: requests_per_second, burst_size, delay_on_error | ❌ |
-| TLS evasion | Settings: impersonate (chrome120 etc.) | ❌ |
-| Advanced rendering | Settings: enable_javascript_rendering, screenshot, browser_use_ai | ❌ |
-| AI triage | Settings: enable, drop_false_positives, drop_threshold, min_severity | ❌ |
-| Bug bounty | Settings: format (hackerone/bugcrowd/generic), output_directory | ❌ |
-| Vuln check selector | New Scan: 71 checks in 15 categories toggle grid | ❌ |
+| Compliance toggle | Settings: enable, select frameworks (PCI-DSS, SOC2, ISO 27001) | ✅ Compliance tab (pci_dss/soc2/iso_27001 IDs) |
+| Templates browser | Settings: list YAML templates, tag filters | ✅ own tab + GET /api/templates (rglob *.yaml, info.tags via pyyaml, graceful []) |
+| Login replay | Settings: macro_path, abort_on_fail, recheck_interval | ✅ real keys verified incl. `_seconds` suffix on recheck_interval |
+| Secrets scanner | New Scan: toggle, pattern selection | ✅ 20-pattern chips (web/src/constants/secrets.ts) |
+| Rate limiting | Settings: requests_per_second, burst_size, delay_on_error | ✅ Advanced tab card |
+| TLS evasion | Settings: impersonate (chrome120 etc.) | ✅ curl_cffi impersonate dropdown chrome99–120/edge/safari |
+| Advanced rendering | Settings: enable_javascript_rendering, screenshot, browser_use_ai | ✅ Browser Automation card (+timeouts) |
+| AI triage | Settings: enable, drop_false_positives, drop_threshold, min_severity | ✅ AI Triage & FP Reduction card |
+| Bug bounty | Settings: format (hackerone/bugcrowd/generic), output_directory | ✅ Bug Bounty card in Advanced (real keys bug_bounty.format/output_directory) |
+| Vuln check selector | New Scan: 71 checks in 15 categories toggle grid | ✅ 68 checks wired (spec category table sum) |
 
 **Acceptance criteria:**
-- ❌ Every config.yaml section has corresponding UI
-- ❌ Every CLI flag has corresponding UI control
-- ❌ Scan wizard can reproduce any CLI invocation
+- ✅ Every config.yaml section has corresponding UI (Settings tabs + NewScan wizard cover all engine config sections)
+- ✅ Every existing CLI flag has a UI control (--formats/--diff/--retest-new/--scope-nl wired); recon/secrets/OpenAPI knobs are config.yaml-driven in the engine (no argparse flags exist) and persist via ScanCreate→args_json
+- ✅ Scan wizard reproduces any CLI invocation for supported flags; engine-only knobs flow through persisted scan options
+
+**Testing & Coverage (2026-08-26):**
+- Backend: **67 pytest passed** (`cd api && ../.venv/bin/pytest -q`) — coverage **99.20%** (`--cov=api`: templates.py & config_service.py 100%, scans.py 98.9%, engine_runner.py 99.2%, report_store.py 98.1%; remainder = 5 defensive branches)
+- Frontend unit: **vitest 26/26**, coverage **97.76% stmts / 94.59% branch** (@vitest/coverage-v8; `pnpm run test:coverage`)
+- E2E: **Playwright 9/9 green headless** (`pnpm run test:e2e` from web/, @playwright/test 1.62.1 + Chromium) — navigation, dashboard ApexCharts mount, Settings 8-tab walkthrough, Reports filter, NewScan submit payload assertions (checks non-empty, toggles true); all network stubbed browser-side
+- Regression locks: `test_build_cmd_maps_no_fake_flags_for_unsupported_fields` (no invented engine flags); route-order guards for literal routes before `/{job_id}`
 
 ---
 
@@ -367,15 +373,15 @@ Or single command:
 |---|---|---|---|---|
 | 0 | Repo + submodule + venv + CLI verified | `--help` runs clean | ✅ Done | e027293 |
 | 1 | FastAPI bridge + SSE + config + reports | curl full scan lifecycle works | ✅ Done (SSE verified, parser fixed, tests added) | 1fec165 + uncommitted |
-| 2 | Vue UI with all core screens | Browser end-to-end flow works | ⏳ Partial (6 views, Settings 3/7 tabs, no ApexCharts, no vuln check selector; pnpm build fixed, tests added) | 1fec165 + uncommitted |
-| 3 | All CLI features exposed in UI | Every config section has UI | ❌ Not started | — |
+| 2 | Vue UI with all core screens | Browser end-to-end flow works | ✅ UI-complete (7/7 Settings tabs, check selector, ApexCharts, Compare page); manual E2E browser run still pending | uncommitted 2026-08-26 |
+| 3 | All CLI features exposed in UI | Every config section has UI | ✅ Done — all 19 feature groups implemented; backend cov 99.2%, vitest cov 97.8%, Playwright 9 E2E green | uncommitted 2026-08-26 |
 | 4 | Docker deploy + auth + persistence | `docker compose up` serves app | ❌ Not started | — |
 
 ---
 
 ## 12. Known Issues & Technical Debt
 
-> Last updated: All 4 blocking issues resolved with verified facts. Ready for Phase 3.
+> Last updated 2026-08-26 (later): **Phase 3 complete** via orchestrated agent waves (Orca CLI attempted first — third-party model providers outage aborted all runs; fell back to internal Task-tool delegation). Wave 1: NewScan recon/secrets/OpenAPI + Reports format dropdown + Settings login-replay/templates/bug-bounty. Wave 2: backend tests+coverage (67 tests, 99.2%), frontend coverage (97.76%) + Playwright E2E (9 green). Verified centrally: pytest 67✅, vue-tsc✅, vitest 26✅, Playwright 9✅, detect_changes LOW risk / 0 affected processes. Remaining: Phase 4 deploy + debt #11/#13 + optional manual browser smoke of new surfaces.
 
 ### Blocking Issues (must fix before Phase 3)
 
@@ -390,11 +396,13 @@ Or single command:
 
 | # | Issue | Severity | Impact |
 |---|---|---|---|
-| 5 | **Settings 3/7 tabs** | 🟡 Medium | notifications, proxy, compliance, advanced tabs missing — design spec exists in `web/design/screens/settings.md` |
-| 6 | **No vuln check selector** | 🟡 Medium | NewScan wizard has no 71-check toggle grid — design spec exists in `web/design/screens/new-scan.md` |
-| 7 | **ApexCharts not rendered** | 🟢 Low | Package installed, design specs include donut+bar, Dashboard.vue only has stat cards |
-| 8 | **No diff/retest UI** | 🟢 Low | deep-eye `--diff` and `--retest-new` have no UI surface |
-| 9 | **dist/ in git?** | 🟢 Low | Verify `.gitignore` covers `web/dist/` — built artifacts shouldn't be committed |
+| 5 | ✅ RESOLVED — Settings 7/7 tabs implemented |
+| 6 | ✅ RESOLVED — 68-check × 15-category selector wired into scan payload |
+| 7 | ✅ RESOLVED — ApexCharts donut + history bar rendered |
+| 8 | ✅ RESOLVED — Compare Scans page + `/api/scans/compare` endpoint |
+| 9 | ✅ RESOLVED — `.gitignore` covers `dist/`, no artifacts tracked |
+
+> Gatcha: root `.gitignore` has a bare `data/` pattern — static frontend data modules go in `web/src/constants/`, not `web/src/data/`.
 
 ### Infrastructure Debt
 

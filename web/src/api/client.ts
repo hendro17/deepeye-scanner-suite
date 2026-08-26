@@ -25,6 +25,16 @@ export const api = {
     stop: (id: number) =>
       request<any>(`/scans/${id}/stop`, { method: "POST" }),
     findings: (id: number) => request<any>(`/scans/${id}/findings`),
+    compare: (scanIdA: number, scanIdB: number) =>
+      request<any>("/scans/compare", {
+        method: "POST",
+        body: JSON.stringify({ scan_id_a: scanIdA, scan_id_b: scanIdB }),
+      }),
+    ingestOpenApi: (filename: string, content: string) =>
+      request<{ targets: string[]; count: number }>("/scans/ingest-openapi", {
+        method: "POST",
+        body: JSON.stringify({ filename, content }),
+      }),
     streamUrl: (id: number) => `${BASE}/scans/${id}/stream`,
   },
 
@@ -53,5 +63,9 @@ export const api = {
       request<any>("/maintenance/update-cve", { method: "POST" }),
     buildRag: () =>
       request<any>("/maintenance/build-rag", { method: "POST" }),
+  },
+
+  templates: {
+    list: () => request<any[]>("/templates"),
   },
 };

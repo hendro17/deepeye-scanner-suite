@@ -1,8 +1,8 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-from ..database import REPORTS_DIR, get_db, finding_to_dict
+from ..database import REPORTS_DIR, finding_to_dict, get_db
 
 
 def parse_findings(job_id: int, json_path: Path) -> int:
@@ -54,9 +54,28 @@ def list_reports() -> list[dict]:
             "filename": f.name,
             "format": ext,
             "size": f.stat().st_size,
-            "created_at": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+            "created_at": datetime.fromtimestamp(f.stat().st_mtime, timezone.utc).isoformat(),
         })
     return files
+
+
+from .scan_compare import compare_scans  # noqa: F401
+
+
+def _read_report_metadata(report_path: str | None) -> tuple[int, object]:
+    if not report_path:
+        return 0, None
+    p = Path(report_path)
+    if p.suffix != ".json" or not p.exists():
+        return 0, None
+    try:
+        with open(p) as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data.get("urls_crawled", 0), data.get("duration")
+    except (json.JSONDecodeError, OSError):
+        pass
+    return 0, None
 
 
 def get_findings(job_id: int) -> dict:
@@ -71,20 +90,7 @@ def get_findings(job_id: int) -> dict:
         sev = f.get("severity", "info")
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
-    urls_crawled = 0
-    duration = None
-    report_path = job["report_path"] if job else None
-    if report_path:
-        p = Path(report_path)
-        if p.suffix == ".json" and p.exists():
-            try:
-                with open(p) as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    urls_crawled = data.get("urls_crawled", 0)
-                    duration = data.get("duration")
-            except (json.JSONDecodeError, OSError):
-                pass
+    urls_crawled, duration = _read_report_metadata(job["report_path"] if job else None)
 
     return {
         "vulnerabilities": findings,

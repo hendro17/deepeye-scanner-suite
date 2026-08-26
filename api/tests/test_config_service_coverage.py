@@ -1,11 +1,11 @@
+
 import yaml
-from pathlib import Path
-from unittest.mock import patch
+
 
 def test_read_write_config(tmp_path):
     cfg_path = tmp_path / "config.yaml"
     data = {"scanner": {"depth": 2}, "ai_providers": {"openai": {"api_key": "sk-abc12345xyz", "enabled": True}}}
-    from api.services.config_service import write_config, read_config
+    from api.services.config_service import read_config, write_config
     write_config(data, cfg_path)
     loaded = read_config(cfg_path)
     assert loaded["scanner"]["depth"] == 2
@@ -16,17 +16,6 @@ def test_read_write_config(tmp_path):
 
 def test_mask_config_variants():
     from api.services.config_service import mask_config
-    data = {
-        "api_key": "sk-1234567890abcdef",
-        "api_key_short": "abc",
-        "nvd_api_key": "secret",
-        "github_token": "tok",
-        "webhook_url": "https://hooks.slack.com/hooks/longurl12345678",
-        "from_address": "test@example.com",
-        "other": "value",
-        "nested": {"api_key": "sk-verylongkey1234567890", "nvd_api_key": "x", "plain": "keep"},
-        "empty_key": "",
-    }
     # Use actual keys checked: api_key, nvd_api_key, github_token, webhook_url, from_address
     data2 = {
         "api_key": "sk-1234567890",
@@ -55,7 +44,6 @@ def test_mask_config_variants():
     assert m2["nvd_api_key"] == ""
 
 def test_get_provider_status(monkeypatch, tmp_path):
-    import api.database as db
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.safe_dump({
         "ai_providers": {
@@ -84,7 +72,7 @@ def test_update_provider(tmp_path, monkeypatch):
     cfg_path.write_text(yaml.safe_dump({"ai_providers": {"openai": {"api_key": "old"}}}))
     monkeypatch.setattr("api.services.config_service.CONFIG_PATH", cfg_path)
     monkeypatch.setattr("api.database.CONFIG_PATH", cfg_path)
-    from api.services.config_service import update_provider, read_config
+    from api.services.config_service import read_config, update_provider
     update_provider("openai", {"model": "gpt-4o"})
     assert read_config(cfg_path)["ai_providers"]["openai"]["model"] == "gpt-4o"
     assert read_config(cfg_path)["ai_providers"]["openai"]["api_key"] == "old"
@@ -96,7 +84,6 @@ def test_update_provider(tmp_path, monkeypatch):
     cfg2.write_text(yaml.safe_dump({}))
     monkeypatch.setattr("api.services.config_service.CONFIG_PATH", cfg2)
     monkeypatch.setattr("api.database.CONFIG_PATH", cfg2)
-    from importlib import reload
     # directly call again (module uses patched path at call time)
     update_provider("another", {"enabled": True})
     assert read_config(cfg2)["ai_providers"]["another"]["enabled"] is True

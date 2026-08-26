@@ -1,5 +1,6 @@
 import json
-from api.database import job_to_dict, finding_to_dict, init_db, get_db
+
+from api.database import finding_to_dict, get_db, init_db, job_to_dict
 
 
 def test_job_to_dict_parses_args(db):

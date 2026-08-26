@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import scans, config, reports, providers, maintenance
+from .routers import config, maintenance, providers, reports, scans, templates
 
 app = FastAPI(title="DeepEye Scanner Suite", version="0.1.0")
 
@@ -30,3 +30,4 @@ app.include_router(config.router)
 app.include_router(reports.router)
 app.include_router(providers.router)
 app.include_router(maintenance.router)
+app.include_router(templates.router)

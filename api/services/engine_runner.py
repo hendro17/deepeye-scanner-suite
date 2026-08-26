@@ -2,13 +2,18 @@ import asyncio
 import json
 import queue
 import re
-import signal
 import subprocess
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..database import PYTHON, SCANNER_DIR, CONFIG_PATH, REPORTS_DIR, get_db, job_to_dict
+from ..database import (
+    CONFIG_PATH,
+    PYTHON,
+    REPORTS_DIR,
+    SCANNER_DIR,
+    get_db,
+)
 from . import report_store
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -73,7 +78,7 @@ def start_scan(job_id: int, job_args: dict) -> int:
 
 
 def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
-    ended = datetime.now().isoformat()
+    ended = datetime.now(timezone.utc).isoformat()
     report_path = None
     if REPORTS_DIR.exists():
         after = {f.name for f in REPORTS_DIR.iterdir()}
@@ -108,14 +113,13 @@ def stop_scan(job_id: int) -> bool:
         pass
     scan["done"] = True
     conn = get_db()
-    conn.execute("UPDATE jobs SET status='stopped', ended_at=? WHERE id=?", (datetime.now().isoformat(), job_id))
+    conn.execute("UPDATE jobs SET status='stopped', ended_at=? WHERE id=?", (datetime.now(timezone.utc).isoformat(), job_id))
     conn.commit()
     conn.close()
     return True
 
 
 async def stream_scan(job_id: int):
-    from starlette.requests import Request
     scan = active_scans.get(job_id)
     if not scan:
         yield 'event: error\ndata: {"message": "Scan not found or not running"}\n\n'

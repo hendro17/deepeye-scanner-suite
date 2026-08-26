@@ -1,7 +1,8 @@
 import json
-from pathlib import Path
+
 from api.database import get_db
-from api.services.report_store import parse_findings, list_reports, get_findings
+from api.services.report_store import get_findings, list_reports, parse_findings
+
 
 def test_parse_findings_list_data(db, tmp_path, monkeypatch):
     conn = get_db()

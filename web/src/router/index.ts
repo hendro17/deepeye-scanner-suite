@@ -5,6 +5,7 @@ import ScanLive from "../views/ScanLive.vue";
 import Findings from "../views/Findings.vue";
 import Reports from "../views/Reports.vue";
 import Settings from "../views/Settings.vue";
+import CompareScans from "../views/CompareScans.vue";
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -15,6 +16,7 @@ const router = createRouter({
     { path: "/scan/:id/findings", name: "findings", component: Findings, props: true },
     { path: "/scan/:id/reports", name: "reports", component: Reports, props: true },
     { path: "/settings", name: "settings", component: Settings },
+    { path: "/compare", name: "compare-scans", component: CompareScans },
   ],
 });
 
