@@ -1,7 +1,11 @@
-import asyncio, queue, json
+import asyncio
+import queue
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
+
 from api.services import engine_runner
+
 
 @pytest.mark.asyncio
 async def test_stream_scan_not_found_exhaust():

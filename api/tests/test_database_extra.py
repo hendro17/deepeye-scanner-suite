@@ -1,6 +1,5 @@
 import sqlite3
-from pathlib import Path
-import sqlite3 as sq
+
 
 def test_init_db_adds_missing_columns(monkeypatch, tmp_path):
     import api.database as dbmod
@@ -27,8 +26,9 @@ def test_main_startup(monkeypatch, tmp_path):
     import api.database as dbmod
     monkeypatch.setattr(dbmod, "DATA_DIR", tmp_path)
     monkeypatch.setattr(dbmod, "DB_PATH", tmp_path / "startup.db")
-    from api.main import app
     from fastapi.testclient import TestClient
+
+    from api.main import app
     # TestClient will trigger startup event
     with TestClient(app) as client:
         r = client.get("/api/health")

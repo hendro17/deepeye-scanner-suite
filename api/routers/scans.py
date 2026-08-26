@@ -1,13 +1,14 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from fastapi import APIRouter
+import yaml
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 from starlette.responses import StreamingResponse
 
 from ..database import get_db, job_to_dict
-from ..services import engine_runner, report_store
+from ..services import engine_runner, report_store, scan_compare
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
 
@@ -20,6 +21,12 @@ class ScanCreate(BaseModel):
     depth: int = 2
     formats: list[str] | None = None
     extra_flags: dict | None = None
+    enable_recon: bool = False
+    full_scan: bool = False
+    quick_scan: bool = False
+    scan_subdomains: bool = False
+    secrets_enabled: bool = False
+    secret_patterns: list[str] | None = None
 
     @field_validator("target_url")
     @classmethod
@@ -43,6 +50,94 @@ class ScanCreate(BaseModel):
         return v
 
 
+class ScanCompare(BaseModel):
+    scan_id_a: int
+    scan_id_b: int
+
+
+class OpenApiIngest(BaseModel):
+    filename: str
+    content: str
+
+
+def _parse_spec(content: str) -> dict:
+    try:
+        spec = json.loads(content)
+    except json.JSONDecodeError:
+        try:
+            spec = yaml.safe_load(content)
+        except yaml.YAMLError as exc:
+            raise HTTPException(400, f"Invalid JSON/YAML spec: {exc}") from exc
+    if not isinstance(spec, dict):
+        raise HTTPException(400, "Spec must be a JSON or YAML object")
+    return spec
+
+
+def _normalize_base(url: str) -> str | None:
+    cleaned = url.strip().rstrip("/")
+    parsed = urlparse(cleaned)
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        return cleaned
+    return None
+
+
+def _extract_v3_bases(servers: list) -> list[str]:
+    bases = []
+    for server in servers:
+        if isinstance(server, dict):
+            base = _normalize_base(str(server.get("url", "")))
+            if base:
+                bases.append(base)
+    return bases
+
+
+def _extract_v2_base(spec: dict) -> str | None:
+    if not spec.get("host"):
+        return None
+    schemes = spec.get("schemes") or ["https"]
+    scheme = schemes[0] if isinstance(schemes, list) and schemes else "https"
+    base_path = str(spec.get("basePath") or "").rstrip("/")
+    return _normalize_base(f"{scheme}://{spec['host']}{base_path}")
+
+
+def _extract_bases(spec: dict) -> list[str]:
+    servers = spec.get("servers")
+    if isinstance(servers, list):
+        bases = _extract_v3_bases(servers)
+        if bases:
+            return bases
+    v2_base = _extract_v2_base(spec)
+    return [v2_base] if v2_base else []
+
+
+def _extract_paths(spec: dict) -> list[str]:
+    raw_paths = spec.get("paths") or {}
+    if not isinstance(raw_paths, dict):
+        return []
+    return [p for p in raw_paths if isinstance(p, str) and p.startswith("/")]
+
+
+def _build_targets(bases: list[str], paths: list[str]) -> list[str]:
+    targets: list[str] = []
+    seen: set[str] = set()
+    for base in bases:
+        for path in paths:
+            url = f"{base}/{path.lstrip('/')}"
+            if url not in seen:
+                seen.add(url)
+                targets.append(url)
+    return targets
+
+
+@router.post("/ingest-openapi", responses={400: {"description": "Invalid JSON/YAML spec"}})
+async def ingest_openapi(body: OpenApiIngest):
+    spec = _parse_spec(body.content)
+    bases = _extract_bases(spec)
+    paths = _extract_paths(spec)
+    targets = _build_targets(bases, paths)
+    return {"targets": targets, "count": len(targets)}
+
+
 @router.post("")
 async def create_scan(scan: ScanCreate):
     args = scan.model_dump()
@@ -63,6 +158,20 @@ async def list_scans():
     rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
     conn.close()
     return [job_to_dict(r) for r in rows]
+
+
+@router.post("/compare", responses={404: {"description": "Scan not found"}})
+async def compare_scans(body: ScanCompare):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM jobs WHERE id IN (?, ?)", (body.scan_id_a, body.scan_id_b)
+    ).fetchall()
+    conn.close()
+    by_id = {r["id"]: r for r in rows}
+    for sid in (body.scan_id_a, body.scan_id_b):
+        if sid not in by_id:
+            raise HTTPException(404, f"Scan {sid} not found")
+    return scan_compare.compare_scans(by_id[body.scan_id_a], by_id[body.scan_id_b])
 
 
 @router.get("/{job_id}")
@@ -89,7 +198,7 @@ async def start_scan(job_id: int):
     pid = engine_runner.start_scan(job_id, args)
     conn.execute(
         "UPDATE jobs SET status='running', pid=?, started_at=? WHERE id=?",
-        (pid, datetime.now().isoformat(), job_id),
+        (pid, datetime.now(timezone.utc).isoformat(), job_id),
     )
     conn.commit()
     conn.close()

@@ -1,10 +1,9 @@
+import asyncio
 import json
 import queue
 import subprocess
-import threading
-import asyncio
-from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from api.services import engine_runner
@@ -29,7 +28,6 @@ def test_build_cmd_variants():
 
 def test_finalize_scan_no_reports_dir(monkeypatch, tmp_path):
     import api.database as dbmod
-    import api.services.report_store as rs
     nonexist = tmp_path / "nope"
     monkeypatch.setattr(dbmod, "REPORTS_DIR", nonexist)
     monkeypatch.setattr(engine_runner, "REPORTS_DIR", nonexist)
@@ -108,8 +106,9 @@ def test_finalize_scan_with_new_json(monkeypatch, tmp_path):
 
 
 def test_start_scan_mocks(monkeypatch, tmp_path):
-    import api.database as dbmod
     import time
+
+    import api.database as dbmod
     reports = tmp_path / "reports_start"
     reports.mkdir()
     (reports / "existing.json").write_text("{}")
@@ -145,8 +144,9 @@ def test_start_scan_mocks(monkeypatch, tmp_path):
         mock_popen.assert_called_once()
 
 def test_start_scan_no_reports_dir(monkeypatch, tmp_path):
-    import api.database as dbmod
     import time
+
+    import api.database as dbmod
     nonexist = tmp_path / "no_reports"
     monkeypatch.setattr(dbmod, "REPORTS_DIR", nonexist)
     monkeypatch.setattr(engine_runner, "REPORTS_DIR", nonexist)

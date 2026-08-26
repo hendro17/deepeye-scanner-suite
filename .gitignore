@@ -42,3 +42,7 @@ web/vite.config.js
 data/
 reports/
 .opencode/
+
+# Playwright artifacts
+playwright-report/
+test-results/

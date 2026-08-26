@@ -1,7 +1,7 @@
-import json
+from unittest.mock import MagicMock, patch
+
 import yaml
-from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
+
 
 def test_scan_create_validates_depth_threads(client):
     # depth invalid
@@ -59,7 +59,7 @@ def test_start_scan_success(client, monkeypatch):
     r = client.post("/api/scans", json={"target_url": "http://example.com"})
     job_id = r.json()["id"]
     mock_pid = 5555
-    with patch("api.services.engine_runner.start_scan", return_value=mock_pid) as m:
+    with patch("api.services.engine_runner.start_scan", return_value=mock_pid):
         r = client.post(f"/api/scans/{job_id}/start")
         assert r.status_code == 200
         assert r.json()["status"] == "running"
@@ -68,7 +68,7 @@ def test_start_scan_success(client, monkeypatch):
 def test_stop_scan_endpoint(client):
     r = client.post("/api/scans", json={"target_url": "http://example.com"})
     job_id = r.json()["id"]
-    with patch("api.services.engine_runner.stop_scan", return_value=True) as m:
+    with patch("api.services.engine_runner.stop_scan", return_value=True):
         r = client.post(f"/api/scans/{job_id}/stop")
         assert r.status_code == 200
         assert r.json()["status"] == "stopped"
@@ -77,7 +77,7 @@ def test_stream_and_findings(client, monkeypatch):
     r = client.post("/api/scans", json={"target_url": "http://example.com"})
     job_id = r.json()["id"]
     # findings via report_store mock
-    with patch("api.services.report_store.get_findings", return_value={"total": 0, "vulnerabilities": []}) as m:
+    with patch("api.services.report_store.get_findings", return_value={"total": 0, "vulnerabilities": []}):
         r = client.get(f"/api/scans/{job_id}/findings")
         assert r.status_code == 200
         assert r.json()["total"] == 0
@@ -91,8 +91,8 @@ def test_stream_and_findings(client, monkeypatch):
         assert r.status_code == 200
 
 def test_config_router(client, tmp_path, monkeypatch):
-    import api.services.config_service as cs
     import api.database as dbmod
+    import api.services.config_service as cs
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.safe_dump({"scanner": {"depth": 5}, "ai_providers": {}}))
     monkeypatch.setattr(cs, "CONFIG_PATH", cfg_path)
@@ -111,12 +111,14 @@ def test_config_router(client, tmp_path, monkeypatch):
     assert r.json()["success"] is True
 
 def test_providers_router(client, monkeypatch):
-    with patch("api.services.config_service.get_provider_status", return_value=[{"name": "openai", "configured": True}]):
+    with (
+        patch("api.services.config_service.get_provider_status", return_value=[{"name": "openai", "configured": True}]),
+        patch("api.routers.providers.get_provider_status", return_value=[{"name": "openai", "configured": True}])
+    ):
         # need to patch where providers router imports
-        with patch("api.routers.providers.get_provider_status", return_value=[{"name": "openai", "configured": True}]):
-            r = client.get("/api/providers/status")
-            assert r.status_code == 200
-            assert isinstance(r.json(), list)
+        r = client.get("/api/providers/status")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
     r = client.post("/api/providers/test/openai")
     assert r.status_code == 200
     assert r.json()["success"] is False

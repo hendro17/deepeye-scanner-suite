@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, computed } from "vue";
 import { RouterLink } from "vue-router";
+import VueApexCharts from "vue3-apexcharts";
+import type { ApexOptions } from "apexcharts";
 import { useScansStore } from "../stores/scans";
 
 const store = useScansStore();
@@ -18,6 +20,92 @@ const sevColors: Record<string, string> = {
 const statusBadge: Record<string, string> = {
   running: "sev-low", completed: "sev-medium", failed: "sev-critical",
   stopped: "sev-info", pending: "sev-info",
+};
+
+const chartsReady = typeof window !== "undefined" && "ResizeObserver" in window;
+
+const severitySeries = computed(() => {
+  const counts = [0, 0, 0, 0, 0];
+  for (const scan of store.scans) {
+    const sc = scan.severity_counts;
+    if (!sc) continue;
+    counts[0] += sc.critical ?? 0;
+    counts[1] += sc.high ?? 0;
+    counts[2] += sc.medium ?? 0;
+    counts[3] += sc.low ?? 0;
+    counts[4] += sc.info ?? 0;
+  }
+  return counts;
+});
+
+const severityDonutOptions: ApexOptions = {
+  chart: { type: "donut", background: "transparent", foreColor: "#8b95a7", fontFamily: "inherit" },
+  labels: ["Critical", "High", "Medium", "Low", "Info"],
+  colors: ["#ff3366", "#ff6644", "#ffaa00", "#4a9eff", "#6b7d99"],
+  stroke: { width: 0 },
+  legend: {
+    position: "right",
+    fontSize: "13px",
+    labels: { colors: "#8b95a7" },
+    markers: { size: 8 },
+  },
+  dataLabels: { enabled: false },
+  plotOptions: {
+    pie: {
+      donut: {
+        size: "72%",
+        labels: {
+          show: true,
+          name: { color: "#8b95a7", fontSize: "13px" },
+          value: { color: "#e0e6ed", fontSize: "24px", fontWeight: 700 },
+          total: { show: true, label: "Findings", color: "#8b95a7", fontSize: "11px" },
+        },
+      },
+    },
+  },
+  tooltip: { theme: "dark" },
+};
+
+function lastSevenDays() {
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const keys: string[] = [];
+  const labels: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    labels.push(dayNames[d.getDay()]);
+  }
+  return { keys, labels };
+}
+
+const historyDays = lastSevenDays();
+
+const historySeries = computed(() => {
+  const data = new Array(7).fill(0);
+  for (const scan of store.scans) {
+    const idx = historyDays.keys.indexOf(String(scan.created_at ?? "").slice(0, 10));
+    if (idx === -1) continue;
+    const sc = scan.severity_counts ?? {};
+    data[idx] += (sc.critical ?? 0) + (sc.high ?? 0) + (sc.medium ?? 0) + (sc.low ?? 0) + (sc.info ?? 0);
+  }
+  return [{ name: "Vulnerabilities", data }];
+});
+
+const scanHistoryOptions: ApexOptions = {
+  chart: { type: "bar", background: "transparent", foreColor: "#8b95a7", toolbar: { show: false }, fontFamily: "inherit" },
+  colors: ["#00f0ff"],
+  plotOptions: { bar: { borderRadius: 4, columnWidth: "60%" } },
+  grid: { borderColor: "rgba(255, 255, 255, 0.05)" },
+  xaxis: {
+    categories: historyDays.labels,
+    axisBorder: { show: false },
+    axisTicks: { show: false },
+    labels: { style: { colors: "#8b95a7" } },
+  },
+  yaxis: { labels: { style: { colors: "#8b95a7" } } },
+  dataLabels: { enabled: false },
+  tooltip: { theme: "dark" },
 };
 
 onMounted(() => store.fetchScans());
@@ -38,6 +126,18 @@ onMounted(() => store.fetchScans());
       ]" :key="i">
         <p class="text-xs text-txt-secondary uppercase tracking-wide">{{ card.label }}</p>
         <p class="text-3xl font-bold mt-2" :style="{ color: card.color }">{{ card.value }}</p>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-[8fr_4fr] gap-4 mb-8">
+      <div class="glass p-5 min-h-[280px]">
+        <h2 class="font-bold mb-2">Severity Distribution</h2>
+        <VueApexCharts v-if="chartsReady" type="donut" height="240" :options="severityDonutOptions" :series="severitySeries" />
+      </div>
+      <div class="glass p-5 min-h-[280px]">
+        <h2 class="font-bold mb-2">Scan History (7 Days)</h2>
+        <VueApexCharts v-if="chartsReady" type="bar" height="240" :options="scanHistoryOptions" :series="historySeries" />
       </div>
     </div>
 
