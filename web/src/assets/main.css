@@ -46,6 +46,7 @@
   .sev-medium { background: #342b1d; color: #ffbb4d; border: 1px solid rgba(255, 170, 0, 0.3); }
   .sev-low { background: #192a43; color: #66b2ff; border: 1px solid rgba(74, 158, 255, 0.3); }
   .sev-info { background: #1e2534; color: #93a4bf; border: 1px solid rgba(107, 125, 153, 0.3); }
+  .sev-green { background: #10332b; color: #2ee6a8; border: 1px solid rgba(0, 255, 155, 0.3); }
 
   .terminal {
     @apply font-mono text-sm overflow-y-auto;

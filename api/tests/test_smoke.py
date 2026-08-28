@@ -44,6 +44,21 @@ def test_scan_invalid_url(client):
     assert r.status_code == 422
 
 
+def test_scan_bare_domain_normalized_to_https(client):
+    r = client.post("/api/scans", json={"target_url": "example.com"})
+    assert r.status_code == 200
+    scan_id = r.json()["id"]
+    detail = client.get(f"/api/scans/{scan_id}")
+    assert detail.json()["target"] == "https://example.com"
+
+
+def test_scan_formats_always_include_json(client):
+    r = client.post("/api/scans", json={"target_url": "http://example.com", "formats": ["html"]})
+    assert r.status_code == 200
+    stored = client.get(f"/api/scans/{r.json()['id']}").json()
+    assert "json" in stored["args"]["formats"]
+
+
 def test_findings_empty(client):
     r = client.post("/api/scans", json={"target_url": "http://example.com"})
     job_id = r.json()["id"]
