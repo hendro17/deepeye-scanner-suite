@@ -31,9 +31,21 @@ class ScanCreate(BaseModel):
     @field_validator("target_url")
     @classmethod
     def validate_url(cls, v):
+        if "://" not in v:
+            v = f"https://{v}"
         if urlparse(v).scheme not in ("http", "https"):
             raise ValueError("target_url must use an http or https scheme")
         return v
+
+    @field_validator("formats")
+    @classmethod
+    def validate_formats(cls, v):
+        if v is None:
+            return v
+        cleaned = [f.strip().lower() for f in v if f.strip()]
+        if "json" not in cleaned:
+            cleaned.append("json")
+        return cleaned
 
     @field_validator("depth")
     @classmethod
@@ -156,8 +168,24 @@ async def create_scan(scan: ScanCreate):
 async def list_scans():
     conn = get_db()
     rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
+    sev_rows = conn.execute(
+        "SELECT job_id, severity, COUNT(*) AS c FROM findings GROUP BY job_id, severity"
+    ).fetchall()
     conn.close()
-    return [job_to_dict(r) for r in rows]
+    counts: dict[int, dict[str, int]] = {}
+    for r in sev_rows:
+        entry = counts.setdefault(
+            r["job_id"], {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        )
+        sev = r["severity"] if r["severity"] in entry else "info"
+        entry[sev] += r["c"]
+    zero = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    result = []
+    for r in rows:
+        d = job_to_dict(r)
+        d["severity_counts"] = counts.get(d["id"], zero)
+        result.append(d)
+    return result
 
 
 @router.post("/compare", responses={404: {"description": "Scan not found"}})

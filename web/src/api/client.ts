@@ -49,8 +49,11 @@ export const api = {
 
   providers: {
     status: () => request<any[]>("/providers/status"),
-    test: (name: string) =>
-      request<any>(`/providers/test/${name}`, { method: "POST" }),
+    test: (name: string, body?: any) =>
+      request<any>(`/providers/test/${name}`, {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      }),
   },
 
   reports: {

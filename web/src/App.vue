@@ -51,6 +51,14 @@ import { RouterLink, RouterView } from "vue-router";
             <span>Settings</span>
           </div>
         </RouterLink>
+
+        <RouterLink to="/docs" v-slot="{ isActive }">
+          <div :class="['flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer',
+            isActive ? 'bg-[rgba(0,240,255,0.1)] text-neon-cyan border border-[rgba(0,240,255,0.2)]'
+                     : 'text-txt-secondary hover:text-txt-primary hover:bg-[rgba(255,255,255,0.03)] border border-transparent']">
+            <span>Docs</span>
+          </div>
+        </RouterLink>
       </nav>
 
       <div class="p-4 border-t border-[rgba(0,240,255,0.08)]">

@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import subprocess
 import yaml
 
 
@@ -119,7 +120,9 @@ def test_providers_router(client, monkeypatch):
         r = client.get("/api/providers/status")
         assert r.status_code == 200
         assert isinstance(r.json(), list)
-    r = client.post("/api/providers/test/openai")
+    fake = subprocess.CompletedProcess(args=[], returncode=0, stdout='{"ok": false, "error": "unused"}', stderr="")
+    with patch("api.services.provider_test.subprocess.run", return_value=fake):
+        r = client.post("/api/providers/test/openai")
     assert r.status_code == 200
     assert r.json()["success"] is False
 

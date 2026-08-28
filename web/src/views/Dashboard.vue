@@ -6,11 +6,24 @@ import type { ApexOptions } from "apexcharts";
 import { useScansStore } from "../stores/scans";
 
 const store = useScansStore();
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 const stats = computed(() => {
   const total = store.scans.length;
   const running = store.scans.filter(s => s.status === "running").length;
   const completed = store.scans.filter(s => s.status === "completed").length;
-  return { total, running, completed };
+  const durations = store.scans
+    .filter(s => s.status === "completed" && s.started_at && s.ended_at)
+    .map(s => (new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 1000)
+    .filter(d => d >= 0);
+  const avgDuration = durations.length
+    ? formatDuration(durations.reduce((a, b) => a + b, 0) / durations.length)
+    : "—";
+  return { total, running, completed, avgDuration };
 });
 
 const sevColors: Record<string, string> = {
@@ -122,7 +135,7 @@ onMounted(() => store.fetchScans());
         { label: 'Total Scans', value: stats.total, color: '#00f0ff' },
         { label: 'Running', value: stats.running, color: '#00ff88' },
         { label: 'Completed', value: stats.completed, color: '#4a9eff' },
-        { label: 'Avg Duration', value: '—', color: '#ffaa00' },
+        { label: 'Avg Duration', value: stats.avgDuration, color: '#ffaa00' },
       ]" :key="i">
         <p class="text-xs text-txt-secondary uppercase tracking-wide">{{ card.label }}</p>
         <p class="text-3xl font-bold mt-2" :style="{ color: card.color }">{{ card.value }}</p>

@@ -5,6 +5,7 @@ import { useScansStore } from "../stores/scans";
 import { CHECK_CATEGORIES, ALL_CHECKS, checkLabel, presetChecks, type PresetId } from "../constants/checks";
 import { SECRET_PATTERNS, ALL_SECRET_PATTERNS } from "../constants/secrets";
 import { api } from "../api/client";
+import InfoTip from "../components/InfoTip.vue";
 
 const router = useRouter();
 const store = useScansStore();
@@ -40,6 +41,31 @@ const scanModeOptions = [
 
 const crawlTargets = ref<string[]>([]);
 const ingesting = ref(false);
+
+const CATEGORY_TIPS: Record<string, string> = {
+  injection: "Menyisipkan kode/perintah jahat lewat input aplikasi: SQL, XSS, command, NoSQL, LDAP, XML, template (SSTI), CRLF, SSE.",
+  ssrf_path_traversal: "Memaksa server memanggil alamat internal (SSRF) atau membaca file di luar folder web (Path Traversal, LFI, RFI, redirect).",
+  auth_session: "Menguji kelemahan login, sesi, CSRF, token JWT, OAuth, dan SAML.",
+  config_exposure: "Konfigurasi salah dan data sensitif terekspos: CORS, CSP, cloud, header, email injection.",
+  xxe_deserialization: "Eksploitasi parsing XML (XXE) dan deserialisasi objek yang tidak aman.",
+  http_header_attacks: "Manipulasi header HTTP: Host header, method override, HTTP request smuggling.",
+  api_graphql: "Tes khusus REST API dan GraphQL: BOLA/IDOR, otentikasi API, introspection GraphQL.",
+  business_logic: "Cacat alur bisnis aplikasi: race condition, mass assignment, manipulasi proses.",
+  file_webshell: "Menguji upload file berbahaya dan mendeteksi webshell di server.",
+  websocket: "Kelemahan pada komunikasi real-time WebSocket.",
+  cache_supply_chain: "Cache poisoning/deception dan risiko skrip pihak ketiga (supply chain).",
+  recon_discovery: "Pemetaan target: brute force direktori, port scan, subdomain takeover, deteksi WAF.",
+  mobile: "Tes aplikasi mobile Android/iOS: hooking Frida, analisis statis, SSL pinning.",
+  specialized: "Deteksi khusus: anomali dengan AI, pemindaian secret, eksploitasi Log4Shell.",
+  parameter_pollution: "Mengirim parameter ganda/berulang (HTTP Parameter Pollution) untuk melewati filter.",
+};
+
+const MODE_TIPS: Record<string, string> = {
+  enable_recon: "Jalankan fase pengumpulan informasi (subdomain, teknologi, aset) sebelum scan utama dimulai.",
+  full_scan: "Scan menyeluruh dengan semua fitur aktif — paling lengkap tapi paling lama.",
+  quick_scan: "Versi cepat: hanya pengujian paling umum. Cocok untuk cek rutin.",
+  scan_subdomains: "Ikut menguji subdomain target (mis. api.domain.com, admin.domain.com).",
+};
 
 async function onSpecFile(e: Event) {
   const input = e.target as HTMLInputElement;
@@ -155,14 +181,14 @@ async function submit() {
     <div class="space-y-6">
       <!-- Target -->
       <div class="glass p-5">
-        <label for="target-url" class="text-sm font-medium block mb-2">Target URL</label>
+        <label for="target-url" class="text-sm font-medium block mb-2">Target URL<InfoTip tip="Alamat lengkap halaman web yang akan diuji keamanan. Wajib diawali http:// atau https://. Contoh: https://contoh.com" /></label>
         <input id="target-url" v-model="targetUrl" type="text" placeholder="https://example.com"
                class="input-field font-mono" />
       </div>
 
       <!-- Scope NL -->
       <div class="glass p-5">
-        <label for="scope-nl" class="text-sm font-medium block mb-2">Natural Language Scope <span class="text-txt-tertiary">(optional)</span></label>
+        <label for="scope-nl" class="text-sm font-medium block mb-2">Natural Language Scope <span class="text-txt-tertiary">(optional)</span><InfoTip tip="Kalimat bebas dalam bahasa sehari-hari untuk membatasi fokus scan. Contoh: 'fokus ke halaman login dan API'. Kosongkan jika ingin scope penuh." /></label>
         <input id="scope-nl" v-model="scopeNl" type="text" placeholder="Focus on authentication and API endpoints"
                class="input-field" />
       </div>
@@ -171,7 +197,7 @@ async function submit() {
       <div class="glass p-5">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
           <div>
-            <label for="openapi-file" class="text-sm font-medium block cursor-pointer">Import OpenAPI Specification</label>
+            <label for="openapi-file" class="text-sm font-medium block cursor-pointer">Import OpenAPI Specification<InfoTip tip="Unggah file spesifikasi OpenAPI/Swagger (.json atau .yaml). Setiap endpoint di dalamnya akan menjadi daftar target crawl. Tombol 'Use' memilih satu target, 'Apply all to target & scope' memakai semuanya sekaligus." /></label>
             <p class="text-xs text-txt-secondary mt-1">Load a .json or .yaml spec to seed crawl targets</p>
           </div>
           <input id="openapi-file" type="file" accept=".json,.yaml,.yml" :disabled="ingesting" @change="onSpecFile"
@@ -200,7 +226,7 @@ async function submit() {
       <div class="glass p-5">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-wider text-txt-secondary">Vulnerability Checks</p>
+            <p class="text-xs font-semibold uppercase tracking-wider text-txt-secondary">Vulnerability Checks<InfoTip tip="Daftar pengujian celah keamanan yang akan dijalankan. Semakin banyak dipilih, semakin lama scan. Gunakan preset (dropdown) untuk memilih cepat, atau atur manual per kategori." /></p>
             <p class="text-xs mt-1"><span class="text-neon-cyan font-medium">{{ selectedCount }}</span> of {{ totalCount }} selected</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
@@ -244,7 +270,7 @@ async function submit() {
                           class="absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full transition-transform duration-150"
                           :class="isCheckSelected(checkId) ? 'translate-x-[18px] bg-neon-cyan' : 'translate-x-0 bg-txt-tertiary'"></span>
                   </button>
-                  <span class="text-sm" :class="isCheckSelected(checkId) ? 'text-txt-primary' : 'text-txt-secondary'">{{ checkLabel(checkId) }}</span>
+                  <span class="text-sm" :class="isCheckSelected(checkId) ? 'text-txt-primary' : 'text-txt-secondary'">{{ checkLabel(checkId) }}<InfoTip :tip="CATEGORY_TIPS[category.id]" /></span>
                 </div>
               </li>
             </ul>
@@ -255,18 +281,18 @@ async function submit() {
       <!-- Sliders -->
       <div class="grid grid-cols-2 gap-4">
         <div class="glass p-5">
-          <label for="scan-threads" class="text-sm font-medium block mb-2">Threads: <span class="text-neon-cyan">{{ threads }}</span></label>
+          <label for="scan-threads" class="text-sm font-medium block mb-2">Threads: <span class="text-neon-cyan">{{ threads }}</span><InfoTip tip="Jumlah permintaan paralel ke target. Semakin tinggi semakin cepat, tapi membebani server target dan berisiko kena blokir/rate limit. Rekomendasi: 5." /></label>
           <input id="scan-threads" v-model.number="threads" type="range" min="1" max="50" class="w-full" />
         </div>
         <div class="glass p-5">
-          <label for="scan-depth" class="text-sm font-medium block mb-2">Depth: <span class="text-neon-cyan">{{ depth }}</span></label>
+          <label for="scan-depth" class="text-sm font-medium block mb-2">Depth: <span class="text-neon-cyan">{{ depth }}</span><InfoTip tip="Kedalaman penjelajahan halaman dari halaman awal. 1 = halaman pertama saja; semakin besar, semakin banyak halaman yang dikunjungi (lebih lama)." /></label>
           <input id="scan-depth" v-model.number="depth" type="range" min="1" max="10" class="w-full" />
         </div>
       </div>
 
       <!-- Formats -->
       <div class="glass p-5">
-        <p class="text-sm font-medium block mb-3">Report Formats</p>
+        <p class="text-sm font-medium block mb-3">Report Formats<InfoTip tip="Format file laporan hasil scan — bebas pilih lebih dari satu. HTML untuk dibaca di browser, PDF untuk dokumen formal, JSON/SARIF untuk tools lain, JUnit untuk CI/CD, CSV/XLSX untuk spreadsheet." /></p>
         <div class="flex flex-wrap gap-2">
           <button v-for="fmt in allFormats" :key="fmt"
                   @click="toggleFormat(fmt)"
@@ -281,7 +307,7 @@ async function submit() {
 
       <!-- Recon & Scan Mode -->
       <div class="glass p-5">
-        <p class="text-sm font-medium block mb-3">Recon &amp; Scan Mode</p>
+        <p class="text-sm font-medium block mb-3">Recon &amp; Scan Mode<InfoTip tip="Mode tambahan untuk mengatur perilaku scan. Semua bersifat opsional dan bisa dikombinasikan." /></p>
         <ul class="grid gap-2 sm:grid-cols-2">
           <li v-for="opt in scanModeOptions" :key="opt.id">
             <div class="flex items-center gap-2.5 cursor-pointer select-none" @click="opt.set(!opt.get())">
@@ -294,7 +320,7 @@ async function submit() {
                       class="absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full transition-transform duration-150"
                       :class="opt.get() ? 'translate-x-[18px] bg-neon-cyan' : 'translate-x-0 bg-txt-tertiary'"></span>
               </button>
-              <span class="text-sm" :class="opt.get() ? 'text-txt-primary' : 'text-txt-secondary'">{{ opt.label }}</span>
+              <span class="text-sm" :class="opt.get() ? 'text-txt-primary' : 'text-txt-secondary'">{{ opt.label }}<InfoTip :tip="MODE_TIPS[opt.id]" /></span>
             </div>
           </li>
         </ul>
@@ -304,7 +330,7 @@ async function submit() {
       <div class="glass p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-sm font-medium">Secrets Scanner</p>
+            <p class="text-sm font-medium">Secrets Scanner<InfoTip tip="Mendeteksi kredensial bocor (API key, token, secret) di halaman dan file yang ditemukan. Setelah aktif, pilih pola credential yang ingin dicari." /></p>
             <p class="text-xs mt-1"><span class="text-neon-cyan font-medium">{{ selectedPatterns.length }}</span> of {{ SECRET_PATTERNS.length }} patterns selected</p>
           </div>
           <button type="button" role="switch" :aria-checked="secretsEnabled" aria-label="Enable secrets scanner"

@@ -92,6 +92,27 @@ describe("api client", () => {
     expect(res.success).toBe(true);
   });
 
+  it("providers.test sends config body", async () => {
+    const mock = mockFetchOnce({ success: true });
+    await api.providers.test("openai", { config: { api_key: "x" } });
+    expect(mock).toHaveBeenCalledWith(
+      "/api/providers/test/openai",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ config: { api_key: "x" } }),
+      })
+    );
+  });
+
+  it("providers.test defaults body to {}", async () => {
+    const mock = mockFetchOnce({ success: true });
+    await api.providers.test("grok");
+    expect(mock).toHaveBeenCalledWith(
+      "/api/providers/test/grok",
+      expect.objectContaining({ method: "POST", body: "{}" })
+    );
+  });
+
   it("reports.list", async () => {
     mockFetchOnce([{ filename: "a.html" }]);
     const res = await api.reports.list();
@@ -112,5 +133,31 @@ describe("api client", () => {
     mockFetchOnce({ status: "started", pid: 2 });
     const res = await api.maintenance.buildRag();
     expect(res.status).toBe("started");
+  });
+
+  it("scans.compare", async () => {
+    const mock = mockFetchOnce({ diff: [] });
+    const res = await api.scans.compare(1, 2);
+    expect(res.diff).toEqual([]);
+    expect(mock).toHaveBeenCalledWith(
+      "/api/scans/compare",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ scan_id_a: 1, scan_id_b: 2 }),
+      })
+    );
+  });
+
+  it("scans.ingestOpenApi", async () => {
+    const mock = mockFetchOnce({ targets: ["/a"], count: 1 });
+    const res = await api.scans.ingestOpenApi("spec.json", '{"openapi":"3.0.0"}');
+    expect(res.count).toBe(1);
+    expect(mock).toHaveBeenCalledWith(
+      "/api/scans/ingest-openapi",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ filename: "spec.json", content: '{"openapi":"3.0.0"}' }),
+      })
+    );
   });
 });
