@@ -4,7 +4,25 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+import types
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
+
+PROBE_OK_JSON = '{"ok": true, "error": null}'
+PROBE_FAIL_JSON = '{"ok": false, "error": "401 Unauthorized: bad key"}'
+PROBE_INVALID_JSON = "not json {"
+PROBE_EMPTY_ERROR_JSON = '{"ok": false, "error": null}'
+PROBE_MISSING_ERROR_JSON = '{"ok": false}'
+
+
+@dataclass
+class ProbeCase:
+    stdout: str
+    provider: str = "openai"
+    config: dict[str, Any] | None = None
+    status_code: int = 200
 
 
 def _build_fake_process(
@@ -52,28 +70,18 @@ def probe_post(client: Any, provider: str, config: dict[str, Any] | None) -> Any
     return client.post(url, json={"config": config})
 
 
-def run_probe_case(
-    client: Any,
-    monkeypatch: Any,
-    stdout: str,
-    provider: str = "openai",
-    config: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+def run_probe_case(client: Any, case: ProbeCase, monkeypatch: Any) -> dict[str, Any]:
     """Fake subprocess output then POST probe. Returns response json body."""
-    make_fake_run(monkeypatch, stdout)
-    return probe_post(client, provider, config).json()
+    make_fake_run(monkeypatch, case.stdout)
+    return probe_post(client, case.provider, case.config).json()
 
 
 def run_probe_case_with_capture(
-    client: Any,
-    monkeypatch: Any,
-    stdout: str,
-    provider: str = "openai",
-    config: dict[str, Any] | None = None,
+    client: Any, case: ProbeCase, monkeypatch: Any
 ) -> tuple[Any, list[Any], list[dict[str, Any]]]:
     """Fake with capture then POST. Returns (response, calls, kw_calls)."""
-    calls, kw_calls = make_fake_run_with_capture(monkeypatch, stdout)
-    resp = probe_post(client, provider, config)
+    calls, kw_calls = make_fake_run_with_capture(monkeypatch, case.stdout)
+    resp = probe_post(client, case.provider, case.config)
     return resp, calls, kw_calls
 
 
@@ -90,3 +98,23 @@ def assert_probe_succeeded(body: dict[str, Any]) -> None:
 
 def assert_no_leak(body: dict[str, Any], secret: str) -> None:
     assert secret not in json.dumps(body)
+
+
+def install_fake_provider(
+    generate_fn: Callable[..., Any] | None = None,
+) -> types.ModuleType:
+    """Install ai_providers.openai_provider with FakeProv. Dedupe CodeScene."""
+    mod = types.ModuleType("ai_providers.openai_provider")
+
+    class FakeProv:
+        def __init__(self, cfg: Any) -> None:
+            pass
+
+        def generate(self, *a: Any, **k: Any) -> Any:
+            if generate_fn is not None:
+                return generate_fn(*a, **k)
+            return "hello"
+
+    mod.OpenAIProvider = FakeProv  # type: ignore[attr-defined]
+    sys.modules["ai_providers.openai_provider"] = mod
+    return mod

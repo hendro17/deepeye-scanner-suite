@@ -82,45 +82,134 @@ def _find_by_id(template_id: str) -> tuple[Path | None, dict | None]:
     return None, None
 
 
-def _validate_content(
-    content: str, source_path: str = "<inline>", source: str | None = None
-) -> dict:
-    """Validate via template_engine/parser.py parse_template. Raise HTTPException 400 on fail."""
-    # Lazy import to allow test monkeypatch and avoid hard dep
+def _parse_yaml(content: str) -> object:
+    """Parse YAML, raise 400 on syntax error."""
+    try:
+        return yaml.safe_load(content)
+    except yaml.YAMLError as ye:
+        raise HTTPException(
+            status_code=400, detail=f"YAML parse error: {ye}"
+        ) from ye  # NOSONAR - helper raise documented via route responses
+
+
+def _validate_dict(data: object) -> None:
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=400, detail="Template top-level must be mapping"
+        )  # NOSONAR - helper raise documented via route responses
+
+
+def _validate_required_fields(data: dict) -> None:
+    for k in ("id", "info", "http"):
+        if k not in data:
+            raise HTTPException(
+                status_code=400, detail=f"missing required field '{k}'"
+            )  # NOSONAR - helper raise documented via route responses
+
+
+def _validate_id_match(data: dict, effective_source: str) -> None:
+    # No-op when source is generic; reserved for strict id/source check
+    if effective_source == "<inline>":
+        return
+    # parser already validates; fallback keeps minimal check
+    return
+
+
+def _validate_info(data: dict) -> None:
+    info = data.get("info")
+    if not isinstance(info, dict):
+        raise HTTPException(
+            status_code=400, detail="missing required field 'info'"
+        )  # NOSONAR - helper raise documented via route responses
+    if not str(info.get("name") or "").strip():
+        raise HTTPException(
+            status_code=400, detail="info.name is required"
+        )  # NOSONAR - helper raise documented via route responses
+
+
+def _validate_http_array(data: dict) -> None:
+    http = data.get("http")
+    if not isinstance(http, list) or len(http) == 0:
+        raise HTTPException(
+            status_code=400, detail="http must be non-empty list"
+        )  # NOSONAR - helper raise documented via route responses
+
+
+def _validate_severity(data: dict) -> None:
+    sev = (
+        str(data.get("info", {}).get("severity") or "").lower()
+        if isinstance(data.get("info"), dict)
+        else ""
+    )
+    if sev and sev not in {"info", "low", "medium", "high", "critical"}:
+        raise HTTPException(
+            status_code=400, detail=f"invalid severity '{sev}'"
+        )  # NOSONAR - helper raise documented via route responses
+
+
+def _validate_matchers(data: dict) -> None:
+    http = data.get("http")
+    if not isinstance(http, list):
+        return
+    for block in http:
+        if not isinstance(block, dict):
+            continue
+        matchers = block.get("matchers")
+        if matchers is None:
+            continue
+        if not isinstance(matchers, list):
+            raise HTTPException(
+                status_code=400, detail="matchers must be list"
+            )  # NOSONAR - helper raise documented via route responses
+
+
+def _try_parse_via_engine(content: str, effective_source: str) -> dict | None:
+    """Try template_engine parser. Return dict on success, None if engine unavailable, raise 400 on engine validation fail."""
     import sys
 
-    effective_source = source if source is not None else source_path
     scanner_root = str(SCANNER_DIR)
     if scanner_root not in sys.path:
         sys.path.insert(0, scanner_root)
     try:
         from modules.template_engine.parser import parse_template  # type: ignore  # noqa: I001
     except ImportError:
-        # Fallback: basic yaml parse check
-        try:
-            data = yaml.safe_load(content)
-        except yaml.YAMLError as ye:
-            raise HTTPException(
-                status_code=400, detail=f"YAML parse error: {ye}"
-            ) from ye  # NOSONAR - helper raise documented via route responses
-        if not isinstance(data, dict):
-            raise HTTPException(
-                status_code=400, detail="Template top-level must be mapping"
-            )  # NOSONAR - helper raise documented via route responses
-        # minimal required check
-        for k in ("id", "info", "http"):
-            if k not in data:
-                raise HTTPException(
-                    status_code=400, detail=f"missing required field '{k}'"
-                )  # NOSONAR - helper raise documented via route responses
-        return data
+        return None
     try:
-        return parse_template(content, source_path=effective_source)
+        return parse_template(content, source_path=effective_source)  # type: ignore[no-untyped-call]
     except Exception as exc:  # NOSONAR - parser validation errors map to 400
         msg = str(exc)
         raise HTTPException(
             status_code=400, detail=msg
         ) from exc  # NOSONAR - helper raise documented via route responses
+
+
+def _validate_via_fallback(content: str, effective_source: str) -> dict:
+    data = _parse_yaml(content)
+    _validate_dict(data)
+    _validate_required_fields(data)  # type: ignore[arg-type]
+    _validate_id_match(data, effective_source)  # type: ignore[arg-type]
+    _validate_info(data)  # type: ignore[arg-type]
+    _validate_http_array(data)  # type: ignore[arg-type]
+    _validate_severity(data)  # type: ignore[arg-type]
+    _validate_matchers(data)  # type: ignore[arg-type]
+    return data  # type: ignore[return-value]
+
+
+def _resolve_effective_source(source_path: str, source: str | None) -> str:
+    if source is not None:
+        return source
+    return source_path
+
+
+def _validate_content(
+    content: str, source_path: str = "<inline>", source: str | None = None
+) -> dict:
+    """Validate via template_engine/parser.py parse_template. Raise HTTPException 400 on fail."""
+    effective_source = _resolve_effective_source(source_path, source)
+    engine_result = _try_parse_via_engine(content, effective_source)
+    if engine_result is not None:
+        return engine_result
+    return _validate_via_fallback(content, effective_source)
 
 
 def _passes_tag_filter(data: dict, tag_filters: list) -> bool:

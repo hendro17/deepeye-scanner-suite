@@ -5,16 +5,22 @@ import sys
 
 import api.services.provider_test as pt
 from api.services import provider_probe
-from api.tests.helpers import assert_probe_failed, probe_post, run_probe_case
+from api.tests.helpers import (
+    ProbeCase,
+    assert_probe_failed,
+    install_fake_provider,
+    probe_post,
+    run_probe_case,
+)
 
 
 def test_provider_probe_invalid_json(client, monkeypatch):
     body = run_probe_case(
         client,
+        ProbeCase(
+            stdout="not json {", provider="openai", config={"api_key": "sk-valid-123"}
+        ),
         monkeypatch,
-        "not json {",
-        provider="openai",
-        config={"api_key": "sk-valid-123"},
     )
     assert_probe_failed(body, "Invalid probe")
 
@@ -32,10 +38,12 @@ def test_provider_probe_oserror(client, monkeypatch):
 def test_provider_probe_empty_error_field(client, monkeypatch):
     body = run_probe_case(
         client,
+        ProbeCase(
+            stdout='{"ok": false, "error": null}',
+            provider="openai",
+            config={"api_key": "sk-ok"},
+        ),
         monkeypatch,
-        '{"ok": false, "error": null}',
-        provider="openai",
-        config={"api_key": "sk-ok"},
     )
     assert_probe_failed(body, "Probe failed")
 
@@ -43,10 +51,8 @@ def test_provider_probe_empty_error_field(client, monkeypatch):
 def test_provider_probe_missing_error_key(client, monkeypatch):
     body = run_probe_case(
         client,
+        ProbeCase(stdout='{"ok": false}', provider="grok", config={"api_key": "sk-ok"}),
         monkeypatch,
-        '{"ok": false}',
-        provider="grok",
-        config={"api_key": "sk-ok"},
     )
     assert_probe_failed(body)
 
@@ -94,21 +100,7 @@ def test_provider_probe_script_unknown_provider(capsys):
 
 
 def test_provider_probe_script_success(monkeypatch, capsys):
-    # mock import to avoid needing real ai_providers
-    import types
-
-    mod = types.ModuleType("ai_providers.openai_provider")
-
-    class FakeProv:
-        def __init__(self, cfg):
-            pass
-
-        def generate(self, prompt, max_tokens=64):
-            return "hello"
-
-    mod.OpenAIProvider = FakeProv
-    sys.modules["ai_providers.openai_provider"] = mod
-    # ensure scanner in path doesn't break
+    install_fake_provider()
     sys.argv = ["provider_probe.py", "openai", json.dumps({"api_key": "sk-123"})]
     provider_probe.main()
     out = capsys.readouterr().out.strip().splitlines()[-1]
@@ -117,19 +109,10 @@ def test_provider_probe_script_success(monkeypatch, capsys):
 
 
 def test_provider_probe_script_empty_response_is_ok(monkeypatch, capsys):
-    import types
+    def _raise_empty(*_a, **_k):
+        raise RuntimeError("empty response from model")
 
-    mod = types.ModuleType("ai_providers.openai_provider")
-
-    class FakeProv:
-        def __init__(self, cfg):
-            pass
-
-        def generate(self, *a, **k):
-            raise RuntimeError("empty response from model")
-
-    mod.OpenAIProvider = FakeProv
-    sys.modules["ai_providers.openai_provider"] = mod
+    install_fake_provider(_raise_empty)
     sys.argv = ["provider_probe.py", "openai", json.dumps({"api_key": "sk-123"})]
     provider_probe.main()
     out = capsys.readouterr().out.strip().splitlines()[-1]
@@ -138,19 +121,10 @@ def test_provider_probe_script_empty_response_is_ok(monkeypatch, capsys):
 
 
 def test_provider_probe_script_exception_is_failure(monkeypatch, capsys):
-    import types
+    def _raise_401(*_a, **_k):
+        raise RuntimeError("401 bad key")
 
-    mod = types.ModuleType("ai_providers.openai_provider")
-
-    class FakeProv:
-        def __init__(self, cfg):
-            pass
-
-        def generate(self, *a, **k):
-            raise RuntimeError("401 bad key")
-
-    mod.OpenAIProvider = FakeProv
-    sys.modules["ai_providers.openai_provider"] = mod
+    install_fake_provider(_raise_401)
     sys.argv = ["provider_probe.py", "openai", json.dumps({"api_key": "sk-bad"})]
     provider_probe.main()
     out = capsys.readouterr().out.strip().splitlines()[-1]

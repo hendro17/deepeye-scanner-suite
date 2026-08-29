@@ -4,6 +4,10 @@ Centralises secret handling so config_service Overall Code Complexity
 (file-level sum) drops. Re-exported via config_service for compat.
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable
+
 _SECRET_KEYS = {
     "api_key",
     "nvd_api_key",
@@ -56,25 +60,35 @@ def _mask_api_key(v: str) -> str:
     return v[:3] + "••••" + v[-4:] if len(v) > 7 else "••••"
 
 
-_MASKERS: dict[str, object] = {
-    "api_key": _mask_api_key,
-    "nvd_api_key": lambda v: "••••",  # type: ignore[arg-type]
-    "github_token": lambda v: "••••",  # type: ignore[arg-type]
-    "webhook_url": lambda v: "••••" + v[-8:] if len(v) >= 8 else "••••",  # type: ignore[arg-type]
-    "from_address": lambda v: "••••",  # type: ignore[arg-type]
-    "password": lambda v: "••••",  # type: ignore[arg-type]
-    "hibp_api_key": lambda v: "••••",  # type: ignore[arg-type]
+def _mask_webhook(v: str) -> str:
+    return "••••" + v[-8:] if len(v) >= 8 else "••••"
+
+
+def _identity(v: object) -> object:
+    return v
+
+
+def _safe_masker(fn: Callable[[str], str]) -> Callable[[object], object]:
+    def _wrapped(v: object) -> object:
+        return fn(v) if isinstance(v, str) and v else v  # type: ignore[arg-type]
+
+    return _wrapped
+
+
+_MASKERS: dict[str, Callable[[object], object]] = {
+    "api_key": _safe_masker(_mask_api_key),
+    "nvd_api_key": _safe_masker(lambda v: "••••"),
+    "github_token": _safe_masker(lambda v: "••••"),
+    "webhook_url": _safe_masker(_mask_webhook),
+    "from_address": _safe_masker(lambda v: "••••"),
+    "password": _safe_masker(lambda v: "••••"),
+    "hibp_api_key": _safe_masker(lambda v: "••••"),
 }
 
 
+def _masked_nested(v: object, k: str) -> object:
+    return mask_config(v) if isinstance(v, dict) else _MASKERS.get(k, _identity)(v)  # type: ignore[arg-type,operator]
+
+
 def mask_config(data: dict) -> dict:
-    out: dict[str, object] = {}
-    for key, val in data.items():
-        if isinstance(val, dict):
-            out[key] = mask_config(val)
-        elif key in _MASKERS and isinstance(val, str) and val:
-            fn = _MASKERS[key]  # type: ignore[assignment]
-            out[key] = fn(val)  # type: ignore[operator]
-        else:
-            out[key] = val
-    return out
+    return {k: _masked_nested(v, k) for k, v in data.items()}

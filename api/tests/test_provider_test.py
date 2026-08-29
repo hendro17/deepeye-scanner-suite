@@ -4,6 +4,8 @@ import json
 import subprocess
 
 from api.tests.helpers import (
+    PROBE_OK_JSON,
+    ProbeCase,
     assert_no_leak,
     assert_probe_failed,
     assert_probe_succeeded,
@@ -30,10 +32,10 @@ def test_unknown_provider_no_subprocess(client, monkeypatch):
 def test_success_path(client, monkeypatch):
     resp, calls, kw_calls = run_probe_case_with_capture(
         client,
+        ProbeCase(
+            stdout=PROBE_OK_JSON, provider="openai", config={"api_key": "sk-test-123"}
+        ),
         monkeypatch,
-        '{"ok": true, "error": null}',
-        provider="openai",
-        config={"api_key": "sk-test-123"},
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -56,10 +58,12 @@ def test_success_path(client, monkeypatch):
 def test_failure_path(client, monkeypatch):
     body = run_probe_case(
         client,
+        ProbeCase(
+            stdout='{"ok": false, "error": "401 Unauthorized: bad key"}',
+            provider="openai",
+            config={"api_key": "sk-bad"},
+        ),
         monkeypatch,
-        '{"ok": false, "error": "401 Unauthorized: bad key"}',
-        provider="openai",
-        config={"api_key": "sk-bad"},
     )
     # response still 200 — probe failure is in body.success
     assert_probe_failed(body, "401")
@@ -97,10 +101,10 @@ def test_masked_body_falls_back_to_disk_key(client, monkeypatch, tmp_path):
     monkeypatch.setattr("api.services.config_service.CONFIG_PATH", disk)
     resp, calls, _ = run_probe_case_with_capture(
         client,
+        ProbeCase(
+            stdout=PROBE_OK_JSON, provider="openai", config={"api_key": "sk-••••here"}
+        ),
         monkeypatch,
-        '{"ok": true, "error": null}',
-        provider="openai",
-        config={"api_key": "sk-••••here"},
     )
     assert resp.status_code == 200
     assert resp.json()["success"] is True
@@ -112,10 +116,10 @@ def test_raises_without_body(client, monkeypatch):
     # no request body at all → falls back to on-disk config (empty in tests)
     resp, _, _ = run_probe_case_with_capture(
         client,
+        ProbeCase(
+            stdout='{"ok": false, "error": "empty"}', provider="openai", config=None
+        ),
         monkeypatch,
-        '{"ok": false, "error": "empty"}',
-        provider="openai",
-        config=None,
     )
     assert resp.status_code == 200
     assert_probe_failed(resp.json())

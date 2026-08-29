@@ -139,12 +139,20 @@ function isMaskedValue(v: unknown): boolean {
   return v.includes("•") || v.includes("…") || v.includes("***");
 }
 
+function _isNestedObject(v: unknown): boolean {
+  return Boolean(v && typeof v === "object" && !Array.isArray(v));
+}
+
+function _isMaskedString(v: unknown): boolean {
+  return typeof v === "string" && isMaskedValue(v);
+}
+
 function _sanitizeEntry(obj: Record<string, unknown>, key: string, value: unknown): void {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
+  if (_isNestedObject(value)) {
     sanitizeMaskedSecrets(value);
     return;
   }
-  if (typeof value !== "string" || !isMaskedValue(value)) return;
+  if (!_isMaskedString(value)) return;
   obj[key] = "";
 }
 
