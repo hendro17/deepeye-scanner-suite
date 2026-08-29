@@ -95,6 +95,25 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
+      - name: Dump Sonar issues (debug)
+        if: always()
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          echo "=== Sonar issues for PR ${{ github.event.pull_request.number || 'N/A' }} ==="
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ]; then
+            echo "No PR number, skipping dump"
+            exit 0
+          fi
+          # Give server time to process
+          sleep 5
+          echo "--- Issues search ---"
+          curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/issues/search?componentKeys=hendro17_deepeye-scanner-suite_214947e1-6b5f-4b67-b3d0-bc501a4a9d0a&pullRequest=$PR&ps=100&resolved=false" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f\"total={d.get('total')}\"); [print(f\"{i['rule']} {i['severity']} {i['component'].split('/')[-1]}:{i.get('line','?')} {i['message'][:120]}\") for i in d.get('issues',[])]" | head -n 120 || echo "failed to parse issues"
+          echo "--- Quality gate status ---"
+          curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=hendro17_deepeye-scanner-suite_214947e1-6b5f-4b67-b3d0-bc501a4a9d0a&pullRequest=$PR" | python3 -m json.tool | head -n 100 || echo "failed QG"
+
       # Fail job when Quality Gate is red — per Sonar docs:
       # https://docs.sonarsource.com/sonarqube-server/latest/analyzing-source-code/ci-integration/overview/#fail-job-when-quality-gate-is-red
       # If you wish to fail your job when the Quality Gate is red, uncomment the
