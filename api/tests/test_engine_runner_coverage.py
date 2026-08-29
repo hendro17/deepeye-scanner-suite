@@ -28,6 +28,7 @@ def test_build_cmd_variants():
 
 def test_finalize_scan_no_reports_dir(monkeypatch, tmp_path):
     import api.database as dbmod
+
     nonexist = tmp_path / "nope"
     monkeypatch.setattr(dbmod, "REPORTS_DIR", nonexist)
     monkeypatch.setattr(engine_runner, "REPORTS_DIR", nonexist)
@@ -37,7 +38,10 @@ def test_finalize_scan_no_reports_dir(monkeypatch, tmp_path):
     monkeypatch.setattr(dbmod, "DB_PATH", db_path)
     dbmod.init_db()
     conn = dbmod.get_db()
-    cur = conn.execute("INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')", ("http://t.com", "{}"))
+    cur = conn.execute(
+        "INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')",
+        ("http://t.com", "{}"),
+    )
     job_id = cur.lastrowid
     conn.commit()
     conn.close()
@@ -49,7 +53,10 @@ def test_finalize_scan_no_reports_dir(monkeypatch, tmp_path):
     conn.close()
     # failed
     conn = dbmod.get_db()
-    cur = conn.execute("INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')", ("http://t.com", "{}"))
+    cur = conn.execute(
+        "INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')",
+        ("http://t.com", "{}"),
+    )
     job_id2 = cur.lastrowid
     conn.commit()
     conn.close()
@@ -62,13 +69,16 @@ def test_finalize_scan_no_reports_dir(monkeypatch, tmp_path):
 
 def test_finalize_scan_with_new_json(monkeypatch, tmp_path):
     import api.database as dbmod
+
     reports = tmp_path / "reports"
     reports.mkdir()
     # create before files
     (reports / "old.json").write_text("{}")
     before = {"old.json"}
     # new file after
-    (reports / "new.json").write_text(json.dumps({"vulnerabilities": [{"type": "XSS"}]}))
+    (reports / "new.json").write_text(
+        json.dumps({"vulnerabilities": [{"type": "XSS"}]})
+    )
     (reports / "new.sarif.json").write_text("{}")  # should be ignored
     monkeypatch.setattr(dbmod, "REPORTS_DIR", reports)
     monkeypatch.setattr(engine_runner, "REPORTS_DIR", reports)
@@ -79,7 +89,10 @@ def test_finalize_scan_with_new_json(monkeypatch, tmp_path):
     monkeypatch.setattr(dbmod, "DB_PATH", db_path)
     dbmod.init_db()
     conn = dbmod.get_db()
-    cur = conn.execute("INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')", ("http://t.com", "{}"))
+    cur = conn.execute(
+        "INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')",
+        ("http://t.com", "{}"),
+    )
     job_id = cur.lastrowid
     conn.commit()
     conn.close()
@@ -94,7 +107,10 @@ def test_finalize_scan_with_new_json(monkeypatch, tmp_path):
     (reports / "new2.html").write_text("html")
     before2 = {"old.json", "new.json", "new.sarif.json"}
     conn = dbmod.get_db()
-    cur = conn.execute("INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')", ("http://t2.com", "{}"))
+    cur = conn.execute(
+        "INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')",
+        ("http://t2.com", "{}"),
+    )
     job_id2 = cur.lastrowid
     conn.commit()
     conn.close()
@@ -109,6 +125,7 @@ def test_start_scan_mocks(monkeypatch, tmp_path):
     import time
 
     import api.database as dbmod
+
     reports = tmp_path / "reports_start"
     reports.mkdir()
     (reports / "existing.json").write_text("{}")
@@ -122,9 +139,13 @@ def test_start_scan_mocks(monkeypatch, tmp_path):
     mock_proc.stdout = ["\x1b[31mhello\x1b[0m\n", "world\n"]
     mock_proc.wait = MagicMock()
     mock_proc.returncode = 0
-    with patch("subprocess.Popen", return_value=mock_proc) as mock_popen, \
-         patch.object(engine_runner, "_finalize_scan", return_value="/tmp/fake.json"):
-        pid = engine_runner.start_scan(1, {"target_url": "http://example.com", "formats": ["html"]})
+    with (
+        patch("subprocess.Popen", return_value=mock_proc) as mock_popen,
+        patch.object(engine_runner, "_finalize_scan", return_value="/tmp/fake.json"),
+    ):
+        pid = engine_runner.start_scan(
+            1, {"target_url": "http://example.com", "formats": ["html"]}
+        )
         assert pid == 12345
         assert 1 in engine_runner.active_scans
         # allow reader thread to process
@@ -143,10 +164,12 @@ def test_start_scan_mocks(monkeypatch, tmp_path):
         engine_runner.active_scans.pop(1, None)
         mock_popen.assert_called_once()
 
+
 def test_start_scan_no_reports_dir(monkeypatch, tmp_path):
     import time
 
     import api.database as dbmod
+
     nonexist = tmp_path / "no_reports"
     monkeypatch.setattr(dbmod, "REPORTS_DIR", nonexist)
     monkeypatch.setattr(engine_runner, "REPORTS_DIR", nonexist)
@@ -158,7 +181,10 @@ def test_start_scan_no_reports_dir(monkeypatch, tmp_path):
     mock_proc.stdout = []
     mock_proc.wait = MagicMock()
     mock_proc.returncode = 1
-    with patch("subprocess.Popen", return_value=mock_proc), patch.object(engine_runner, "_finalize_scan", return_value=None):
+    with (
+        patch("subprocess.Popen", return_value=mock_proc),
+        patch.object(engine_runner, "_finalize_scan", return_value=None),
+    ):
         pid = engine_runner.start_scan(2, {"target_url": "http://example.com"})
         assert pid == 999
         time.sleep(0.1)
@@ -168,6 +194,7 @@ def test_start_scan_no_reports_dir(monkeypatch, tmp_path):
 
 def test_stop_scan_branches(monkeypatch, tmp_path):
     import api.database as dbmod
+
     monkeypatch.setattr(dbmod, "DATA_DIR", tmp_path)
     monkeypatch.setattr(dbmod, "DB_PATH", tmp_path / "stop.db")
     dbmod.init_db()
@@ -185,7 +212,10 @@ def test_stop_scan_branches(monkeypatch, tmp_path):
     engine_runner.active_scans[11] = {"process": mock_proc, "done": False}
     # need job in db
     conn = dbmod.get_db()
-    cur = conn.execute("INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')", ("http://t.com", "{}"))
+    cur = conn.execute(
+        "INSERT INTO jobs (target, args_json, status) VALUES (?, ?, 'pending')",
+        ("http://t.com", "{}"),
+    )
     job_id = cur.lastrowid
     conn.commit()
     conn.close()
@@ -201,13 +231,18 @@ def test_stop_scan_branches(monkeypatch, tmp_path):
     # TimeoutExpired branch
     mock_proc2 = MagicMock()
     mock_proc2.terminate = MagicMock()
-    mock_proc2.wait = MagicMock(side_effect=subprocess.TimeoutExpired(cmd="x", timeout=5))
+    mock_proc2.wait = MagicMock(
+        side_effect=subprocess.TimeoutExpired(cmd="x", timeout=5)
+    )
     mock_proc2.kill = MagicMock()
     engine_runner.active_scans[20] = {"process": mock_proc2, "done": False}
     # need job id 20 not necessarily in db but stop_scan will still try to update db
     # create job 20
     conn = dbmod.get_db()
-    conn.execute("INSERT INTO jobs (id, target, args_json, status) VALUES (?, ?, ?, ?)", (20, "http://t.com", "{}", "pending"))
+    conn.execute(
+        "INSERT INTO jobs (id, target, args_json, status) VALUES (?, ?, ?, ?)",
+        (20, "http://t.com", "{}", "pending"),
+    )
     conn.commit()
     conn.close()
     res = engine_runner.stop_scan(20)
@@ -219,7 +254,10 @@ def test_stop_scan_branches(monkeypatch, tmp_path):
     mock_proc3.terminate = MagicMock(side_effect=ProcessLookupError)
     engine_runner.active_scans[30] = {"process": mock_proc3, "done": False}
     conn = dbmod.get_db()
-    conn.execute("INSERT OR IGNORE INTO jobs (id, target, args_json, status) VALUES (?, ?, ?, ?)", (30, "http://t.com", "{}", "pending"))
+    conn.execute(
+        "INSERT OR IGNORE INTO jobs (id, target, args_json, status) VALUES (?, ?, ?, ?)",
+        (30, "http://t.com", "{}", "pending"),
+    )
     conn.commit()
     conn.close()
     res3 = engine_runner.stop_scan(30)
@@ -243,9 +281,11 @@ async def test_stream_scan_success(monkeypatch):
     q.put(("log", "hello", "2024-01-01T00:00:00Z"))
     q.put(("done", "/path/report.json", 0))
     engine_runner.active_scans[42] = {"queue": q, "done": False, "process": MagicMock()}
+
     # mock asyncio.to_thread to return queue items directly
     async def fake_to_thread(func, *args, **kwargs):
         return q.get_nowait()
+
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     gen = engine_runner.stream_scan(42)
     outputs = []
@@ -263,8 +303,10 @@ async def test_stream_scan_keepalive_and_done(monkeypatch):
     # queue empty then done flag
     q = queue.Queue()
     engine_runner.active_scans[43] = {"queue": q, "done": True, "process": MagicMock()}
+
     async def fake_to_thread_raise(func, *args, **kwargs):
         raise queue.Empty
+
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread_raise)
     gen = engine_runner.stream_scan(43)
     # should break immediately because done True after Empty
@@ -276,14 +318,20 @@ async def test_stream_scan_keepalive_and_done(monkeypatch):
     engine_runner.active_scans.pop(43, None)
     # now test keepalive path when not done
     q2 = queue.Queue()
-    engine_runner.active_scans[44] = {"queue": q2, "done": False, "process": MagicMock()}
+    engine_runner.active_scans[44] = {
+        "queue": q2,
+        "done": False,
+        "process": MagicMock(),
+    }
     call_count = {"c": 0}
+
     async def fake_to_thread_keepalive(func, *args, **kwargs):
         call_count["c"] += 1
         if call_count["c"] == 1:
             raise queue.Empty
         # second call return done
         return ("done", None, 0)
+
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread_keepalive)
     gen2 = engine_runner.stream_scan(44)
     outputs2 = []

@@ -22,8 +22,53 @@ def write_config(data: dict, path: Path | None = None) -> None:
         yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
 
 
+_SECRET_KEYS = {
+    "api_key",
+    "nvd_api_key",
+    "github_token",
+    "webhook_url",
+    "from_address",
+    "password",
+    "hibp_api_key",
+}
+
+
+def _is_masked_value(value: object) -> bool:
+    """True if value looks like a masked placeholder (contains •, …, or ***)."""
+    if not isinstance(value, str):
+        return False
+    s = value.strip()
+    if not s:
+        return False
+    return "•" in s or "…" in s or "***" in s
+
+
+def _merge_preserve_masked(base: dict, incoming: dict) -> dict:
+    """Deep-merge incoming into base, skipping masked secret values.
+
+    Masked values (e.g. 'sk-••••e2e4') must never overwrite the real secret
+    stored on disk. This mirrors the overlay logic in provider_test.py
+    (_apply_overlay) but works recursively for the full config tree.
+    Empty string for secret keys also preserves existing value, so frontend
+    can sanitize masked placeholders to '' for UX without wiping disk.
+    """
+    for key, val in incoming.items():
+        if isinstance(val, dict) and isinstance(base.get(key), dict):
+            _merge_preserve_masked(base[key], val)
+        elif isinstance(val, str) and _is_masked_value(val):
+            continue
+        elif (
+            isinstance(val, str) and val == "" and key in _SECRET_KEYS and base.get(key)
+        ):
+            # Sanitized masked → empty should keep real secret
+            continue
+        else:
+            base[key] = val
+    return base
+
+
 def mask_config(data: dict) -> dict:
-    masked = {}
+    masked: dict[str, object] = {}
     for key, val in data.items():
         if isinstance(val, dict):
             masked[key] = mask_config(val)
@@ -40,19 +85,33 @@ def mask_config(data: dict) -> dict:
     return masked
 
 
+_KEYLESS_PROVIDERS = {"ollama", "lmstudio"}
+
+
 def get_provider_status() -> list[dict]:
     config = read_config()
     providers = config.get("ai_providers", {})
     statuses = []
     for name, cfg in providers.items():
-        has_key = bool(cfg.get("api_key")) if name != "ollama" else bool(cfg.get("base_url"))
-        statuses.append({
-            "name": name,
-            "enabled": cfg.get("enabled", False),
-            "configured": has_key,
-            "model": cfg.get("model", ""),
-            "base_url": cfg.get("base_url", ""),
-        })
+        if name in _KEYLESS_PROVIDERS:
+            # Keyless (ollama/lmstudio) "configured" only if enabled + base_url present.
+            # Default config ships with base_url but enabled=false -> should NOT show
+            # Configured badge until user actively enables. Otherwise badge toujours muncul
+            # padahal user belum simpan apa pun.
+            has_key = bool(cfg.get("enabled")) and bool(
+                str(cfg.get("base_url") or "").strip()
+            )
+        else:
+            has_key = bool(str(cfg.get("api_key") or "").strip())
+        statuses.append(
+            {
+                "name": name,
+                "enabled": cfg.get("enabled", False),
+                "configured": has_key,
+                "model": cfg.get("model", ""),
+                "base_url": cfg.get("base_url", ""),
+            }
+        )
     return statuses
 
 

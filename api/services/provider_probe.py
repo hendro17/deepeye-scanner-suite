@@ -4,6 +4,7 @@ argv: sys.argv[1] = provider name, sys.argv[2] = JSON provider config dict.
 Prints EXACTLY one JSON object on stdout: {"ok": bool, "error": str | null}.
 Always exits 0. Never print <dict> directly (Python repr is not valid JSON).
 """
+
 import json
 import sys
 from pathlib import Path
@@ -11,10 +12,12 @@ from pathlib import Path
 # Guard against C/POSIX locale: non-ASCII error text would crash loggers/print
 # with UnicodeEncodeError before we can surface the real probe error.
 for _stream in (sys.stdout, sys.stderr):
-    try:
-        _stream.reconfigure(encoding="utf-8", errors="backslashreplace")
-    except Exception:
-        pass
+    reconfigure = getattr(_stream, "reconfigure", None)
+    if callable(reconfigure):
+        try:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (OSError, ValueError):
+            pass  # NOSONAR - best-effort locale guard
 
 CLASS_MAP = {
     "openai": "OpenAIProvider",
@@ -63,7 +66,7 @@ def main() -> None:
         module = __import__(f"ai_providers.{name}_provider", fromlist=[cls_name])
         provider = getattr(module, cls_name)(config)
         provider.generate(PROBE_PROMPT, max_tokens=PROBE_MAX_TOKENS)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # NOSONAR - probe must surface any provider error as JSON
         err = str(exc)
         # 200-OK-with-no-text (reasoning model consumed the whole budget) = connection OK.
         if "empty" in err.lower() and "response" in err.lower():

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..database import (
     CONFIG_PATH,
+    DATA_DIR,
     PYTHON,
     REPORTS_DIR,
     SCANNER_DIR,
@@ -21,12 +22,130 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 active_scans: dict[int, dict] = {}
 
 
+def _load_base_config() -> dict:
+    import yaml
+
+    if not CONFIG_PATH.exists():
+        return {}
+    try:
+        with open(CONFIG_PATH) as f:
+            return yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+
+
+def _build_cookie_headers_config(base_cfg: dict, job_args: dict) -> None:
+    headers = job_args.get("auth_headers") or {}
+    cookies = job_args.get("auth_cookies") or {}
+    if headers:
+        merged = dict(base_cfg["scanner"].get("custom_headers") or {})
+        merged.update(headers)
+        base_cfg["scanner"]["custom_headers"] = merged
+    if cookies:
+        merged = dict(base_cfg["scanner"].get("cookies") or {})
+        merged.update(cookies)
+        base_cfg["scanner"]["cookies"] = merged
+
+
+def _build_login_macro(job_id: int, job_args: dict, base_cfg: dict) -> None:
+    import json as _json
+
+    login_url = job_args.get("login_url") or job_args.get("target_url")
+    username = job_args.get("login_username") or ""
+    password = job_args.get("login_password") or ""
+    u_field = job_args.get("login_username_field") or "username"
+    p_field = job_args.get("login_password_field") or "password"
+    target_url = job_args.get("target_url")
+    macro_dir = Path(DATA_DIR) / "tmp_scans" / str(job_id)
+    macro_dir.mkdir(parents=True, exist_ok=True)
+    macro_path = macro_dir / "login_macro.json"
+    macro = {
+        "steps": [
+            {"action": "get", "url": login_url},
+            {
+                "action": "extract_csrf",
+                "from": 'input[name="csrf_token"]',
+                "save_as": "csrf_token",
+            },
+            {
+                "action": "extract_csrf",
+                "from": 'input[name="_token"]',
+                "save_as": "csrf_token2",
+            },
+            {
+                "action": "extract_csrf",
+                "from": 'input[name="authenticity_token"]',
+                "save_as": "csrf_token3",
+            },
+            {
+                "action": "post",
+                "url": login_url,
+                "data": {
+                    u_field: username,
+                    p_field: password,
+                    "csrf_token": "${csrf_token}",
+                    "_token": "${csrf_token2}",
+                    "authenticity_token": "${csrf_token3}",
+                },
+            },
+        ],
+        "auth_check": {"url": target_url, "must_not_contain": "login"},
+    }
+    with open(macro_path, "w") as f:
+        _json.dump(macro, f, indent=2)
+    try:
+        macro_path.chmod(0o600)
+    except OSError:
+        pass  # NOSONAR - best-effort permission hardening
+    base_cfg.setdefault("login_replay", {})
+    base_cfg["login_replay"]["enabled"] = True
+    base_cfg["login_replay"]["macro_path"] = str(macro_path)
+    base_cfg["login_replay"]["abort_on_fail"] = False
+    base_cfg["login_replay"]["recheck_interval_seconds"] = 600
+    base_cfg["login_replay"]["_generated_for_job"] = job_id
+
+
+def _build_temp_config(job_id: int, job_args: dict) -> Path:
+    """Create per-scan temp config overlay for auth. Returns path to temp yaml."""
+    import yaml
+
+    auth_mode = job_args.get("auth_mode", "none")
+    if auth_mode == "none":
+        return CONFIG_PATH
+    base_cfg = _load_base_config()
+    base_cfg.setdefault("scanner", {})
+    if auth_mode == "cookie_headers":
+        _build_cookie_headers_config(base_cfg, job_args)
+    elif auth_mode == "form_login":
+        _build_login_macro(job_id, job_args, base_cfg)
+    tmp_dir = Path(DATA_DIR) / "tmp_scans" / str(job_id)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_path = tmp_dir / "config.yaml"
+    with open(tmp_path, "w") as f:
+        yaml.safe_dump(base_cfg, f, sort_keys=False)
+    try:
+        tmp_path.chmod(0o600)
+    except OSError:
+        pass  # NOSONAR - best-effort permission hardening
+    return tmp_path
+
+
 def build_cmd(job_args: dict) -> list[str]:
+    job_id = job_args.get("_job_id", 0)
+    config_path = (
+        _build_temp_config(job_id, job_args)
+        if job_args.get("auth_mode", "none") != "none"
+        else CONFIG_PATH
+    )
+    # Store resolved path for cleanup/debugging
+    job_args["_resolved_config"] = str(config_path)
     cmd = [
         PYTHON,
         str(SCANNER_DIR / "deep_eye.py"),
-        "-u", job_args["target_url"],
-        "-c", str(CONFIG_PATH),
+        "-u",
+        job_args["target_url"],
+        "-c",
+        str(config_path),
         "--no-banner",
     ]
     if job_args.get("formats"):
@@ -37,6 +156,8 @@ def build_cmd(job_args: dict) -> list[str]:
 
 
 def start_scan(job_id: int, job_args: dict) -> int:
+    # Inject job_id for temp config generation
+    job_args["_job_id"] = job_id
     cmd = build_cmd(job_args)
     before = set()
     if REPORTS_DIR.exists():
@@ -83,7 +204,11 @@ def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
     if REPORTS_DIR.exists():
         after = {f.name for f in REPORTS_DIR.iterdir()}
         new_files = after - before
-        json_files = [f for f in new_files if f.endswith(".json") and not f.endswith(".sarif.json")]
+        json_files = [
+            f
+            for f in new_files
+            if f.endswith(".json") and not f.endswith(".sarif.json")
+        ]
         if json_files:
             report_path = str(REPORTS_DIR / max(json_files))
     conn = get_db()
@@ -95,6 +220,15 @@ def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
     conn.close()
     if report_path:
         report_store.parse_findings(job_id, Path(report_path))
+    # cleanup per-scan temp config/macro (chmod 0o600 already, now remove)
+    try:
+        import shutil
+
+        tmp_scan_dir = Path(DATA_DIR) / "tmp_scans" / str(job_id)
+        if tmp_scan_dir.is_dir():
+            shutil.rmtree(tmp_scan_dir, ignore_errors=True)
+    except OSError:
+        pass  # NOSONAR - best-effort cleanup
     return report_path
 
 
@@ -110,10 +244,13 @@ def stop_scan(job_id: int) -> bool:
         except subprocess.TimeoutExpired:
             process.kill()
     except ProcessLookupError:
-        pass
+        pass  # NOSONAR - process already exited
     scan["done"] = True
     conn = get_db()
-    conn.execute("UPDATE jobs SET status='stopped', ended_at=? WHERE id=?", (datetime.now(timezone.utc).isoformat(), job_id))
+    conn.execute(
+        "UPDATE jobs SET status='stopped', ended_at=? WHERE id=?",
+        (datetime.now(timezone.utc).isoformat(), job_id),
+    )
     conn.commit()
     conn.close()
     return True

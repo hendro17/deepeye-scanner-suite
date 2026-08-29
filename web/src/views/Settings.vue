@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { api } from "../api/client";
 import InfoTip from "../components/InfoTip.vue";
-import { useProviderTest } from "../composables/useProviderTest";
+import SettingsProviders from "./SettingsProviders.vue";
+import SettingsTemplates from "./SettingsTemplates.vue";
 
 const TAB_TIPS: Record<string, string> = {
   providers: "Konfigurasi 11 provider AI: API key, model, dan pengaktifan masing-masing.",
-  scanner: "Nilai bawaan untuk scan baru: kedalaman, thread, AI provider, proxy, dan mode.",
+  scanner: "Nilai bawaan untuk scan baru: kedalaman, thread, AI provider, proxy, recon/full/quick/subdomain.",
   notifications: "Kirim notifikasi hasil scan lewat email, Slack, dan Discord.",
   proxy: "Proxy intercepting (mitmweb), proxy HTTP scanner, dan penyamaran TLS fingerprint.",
   compliance: "Tandai temuan dengan kontrol standar kepatuhan (PCI-DSS, SOC 2, ISO 27001).",
@@ -15,25 +16,73 @@ const TAB_TIPS: Record<string, string> = {
   maintenance: "Perawatan: update database CVE dari NVD dan rebuild indeks RAG.",
 };
 
-const config = ref<any>({});
-const providers = ref<any[]>([]);
-const templates = ref<any[]>([]);
-const templatesLoaded = ref(false);
+type ProviderStatus = { name: string; enabled?: boolean; configured?: boolean };
+
+type AppConfig = Record<string, unknown> & {
+  scanner: Record<string, unknown> & { default_depth?: number; default_threads?: number; ai_provider?: string; proxy?: string; enable_recon?: boolean; full_scan?: boolean; quick_scan?: boolean; scan_subdomains?: boolean };
+  notifications: Record<string, unknown> & {
+    enabled?: boolean; notify_on_critical?: boolean;
+    email: Record<string, unknown> & { enabled?: boolean; smtp_server?: string; smtp_port?: number; username?: string; password?: string; from_address?: string; to_addresses: string[] };
+    slack: Record<string, unknown> & { enabled?: boolean; webhook_url?: string; channel?: string; username?: string; icon_emoji?: string };
+    discord: Record<string, unknown> & { enabled?: boolean; webhook_url?: string; username?: string; avatar_url?: string };
+  };
+  intercepting_proxy: Record<string, unknown> & { enabled?: boolean; bind_host?: string; proxy_port?: number; mitmweb_port?: number; required?: boolean };
+  proxy: Record<string, unknown> & { enabled?: boolean; http?: string; https?: string };
+  tls_evasion: Record<string, unknown> & { enabled?: boolean; impersonate?: string };
+  compliance: Record<string, unknown> & { enabled?: boolean; frameworks?: string[] };
+  advanced: Record<string, unknown> & { enable_javascript_rendering?: boolean; screenshot_enabled?: boolean; enable_browser_use_ai?: boolean; browser_timeout?: number; browser_page_timeout?: number; browser_navigation_timeout?: number; ua_rotation?: boolean; jitter_min?: number; jitter_max?: number; proxy_pool: string[]; exclude_extensions: string[]; exclude_patterns: string[]; max_response_size?: number };
+  ai_triage: Record<string, unknown> & { enabled?: boolean; drop_false_positives?: boolean; drop_threshold?: number; min_severity?: string };
+  rag: Record<string, unknown> & { enabled?: boolean; auto_rebuild?: boolean; index_path?: string; top_k?: number; min_score?: number };
+  rate_limiting: Record<string, unknown> & { enabled?: boolean; requests_per_second?: number; burst_size?: number; delay_on_error?: number };
+  logging: Record<string, unknown> & { level?: string; log_file?: string; log_to_file?: boolean; max_file_size?: number; backup_count?: number };
+  database: Record<string, unknown> & { type?: string; path?: string; auto_cleanup_days?: number };
+  login_replay: Record<string, unknown> & { enabled?: boolean; macro_path?: string; recheck_interval_seconds?: number; abort_on_fail?: boolean };
+  bug_bounty: Record<string, unknown> & { format?: string; output_directory?: string };
+  ai_providers: Record<string, Record<string, unknown>>;
+  templates: Record<string, unknown>;
+};
+
+const config = ref<AppConfig>({} as AppConfig);
+const providers = ref<ProviderStatus[]>([]);
 const activeTab = ref("providers");
 const saving = ref(false);
 const savedMsg = ref("");
 
-const { isKeyless, isConnected, testStatus, testProvider: runProviderTest } = useProviderTest();
-
-function statusOf(name: string) {
-  return providers.value.find((p) => p.name === name);
-}
-
-function testProvider(name: string) {
-  return runProviderTest(name, config.value.ai_providers?.[name]);
-}
-
 const providerNames = ["openai", "claude", "grok", "gemini", "ollama", "openrouter", "groq", "mistral", "litellm", "lmstudio", "orcarouter"];
+
+const aiProviderOptions = computed(() => {
+  const enabledSet = new Set(providers.value.filter((p) => p.enabled).map((p) => p.name));
+  return providerNames.map((n) => ({ name: n, active: enabledSet.has(n) }));
+});
+
+const activeAiProviderCount = computed(() => aiProviderOptions.value.filter((o) => o.active).length);
+
+const scannerProxyOptions = computed(() => {
+  const opts: { label: string; value: string }[] = [{ label: "Direct — tanpa proxy", value: "" }];
+  const cfg = config.value as Record<string, Record<string, unknown> & { enabled?: boolean; proxy_port?: number; bind_host?: string; http?: string; https?: string; proxy_pool?: string[]; proxy?: string }>;
+  const ip = cfg.intercepting_proxy as Record<string, unknown> | undefined;
+  if (ip && typeof ip.enabled === "boolean" && ip.enabled && typeof ip.proxy_port === "number" && ip.proxy_port) {
+    const host = typeof ip.bind_host === "string" && ip.bind_host ? ip.bind_host : "127.0.0.1";
+    const url = `http://${host}:${String(ip.proxy_port)}`;
+    opts.push({ label: `Intercepting (mitmweb) — ${url}`, value: url });
+  }
+  const px = cfg.proxy as Record<string, unknown> | undefined;
+  if (px && px.enabled) {
+    if (typeof px.http === "string" && px.http) opts.push({ label: `HTTP Proxy — ${px.http}`, value: px.http });
+    if (typeof px.https === "string" && px.https && px.https !== px.http) opts.push({ label: `HTTPS Proxy — ${px.https}`, value: String(px.https) });
+  }
+  const advanced = cfg.advanced as Record<string, unknown> | undefined;
+  const pool: string[] = Array.isArray(advanced?.proxy_pool) ? (advanced.proxy_pool as string[]) : [];
+  pool.forEach((p: string, i: number) => {
+    if (p && !opts.some((o) => o.value === p)) opts.push({ label: `Pool #${i + 1} — ${p}`, value: p });
+  });
+  const scanner = cfg.scanner as Record<string, unknown> | undefined;
+  const cur = typeof scanner?.proxy === "string" ? scanner.proxy : "";
+  if (cur && !opts.some((o) => o.value === cur)) {
+    opts.push({ label: `Custom — ${cur}`, value: cur });
+  }
+  return opts;
+});
 
 const impersonationTargets = ["chrome99", "chrome101", "chrome104", "chrome107", "chrome110", "chrome116", "chrome120", "edge99", "edge101", "safari15_3", "safari15_5", "safari17_0"];
 const logLevels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
@@ -45,13 +94,15 @@ const complianceFrameworks = [
 ];
 
 function isFrameworkEnabled(id: string): boolean {
-  const list = config.value.compliance?.frameworks;
-  return Array.isArray(list) && list.includes(id);
+  const compliance = config.value.compliance as Record<string, unknown> | undefined;
+  const list = compliance?.frameworks;
+  return Array.isArray(list) && (list as string[]).includes(id);
 }
 
 function toggleFramework(id: string, ev: Event) {
   const checked = (ev.target as HTMLInputElement).checked;
-  const list = config.value.compliance?.frameworks;
+  const compliance = config.value.compliance as Record<string, unknown> | undefined;
+  const list = compliance?.frameworks as string[] | undefined;
   if (!Array.isArray(list)) return;
   const idx = list.indexOf(id);
   if (checked && idx === -1) list.push(id);
@@ -66,10 +117,27 @@ function removeListItem(list: unknown, index: number) {
   if (Array.isArray(list)) list.splice(index, 1);
 }
 
+function isMaskedValue(v: unknown): boolean {
+  if (typeof v !== "string" || !v) return false;
+  return v.includes("•") || v.includes("…") || v.includes("***");
+}
+
+function sanitizeMaskedSecrets(obj: unknown): void {
+  if (!obj || typeof obj !== "object") return;
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      sanitizeMaskedSecrets(v);
+    } else if (typeof v === "string" && isMaskedValue(v)) {
+      (obj as Record<string, unknown>)[k] = "";
+    }
+  }
+}
+
 onMounted(async () => {
   const [cfgRes, provRes] = await Promise.all([api.config.get(), api.providers.status()]);
-  config.value = cfgRes.config;
-  providers.value = provRes;
+  sanitizeMaskedSecrets(cfgRes.config);
+  config.value = cfgRes.config as AppConfig;
+  providers.value = provRes as ProviderStatus[];
 });
 
 async function save() {
@@ -95,19 +163,8 @@ async function buildRag() {
   setTimeout(() => (savedMsg.value = ""), 3000);
 }
 
-async function selectTab(tab: string) {
+function selectTab(tab: string) {
   activeTab.value = tab;
-  if (tab === "templates" && !templatesLoaded.value) await loadTemplates();
-}
-
-async function loadTemplates() {
-  try {
-    templates.value = await api.templates.list();
-  } catch {
-    templates.value = [];
-  } finally {
-    templatesLoaded.value = true;
-  }
 }
 </script>
 
@@ -118,7 +175,7 @@ async function loadTemplates() {
 
     <!-- Tabs -->
     <div class="flex flex-wrap gap-1 mb-6 border-b border-[rgba(0,240,255,0.08)] pb-px">
-      <button v-for="tab in ['providers', 'scanner', 'notifications', 'proxy', 'compliance', 'advanced', 'templates', 'maintenance']" :key="tab"
+      <button v-for="tab in ['providers', 'proxy', 'scanner', 'notifications', 'compliance', 'advanced', 'templates', 'maintenance']" :key="tab"
               @click="selectTab(tab)"
                :class="['px-4 py-2 text-sm font-medium border-b-2 transition-all capitalize inline-flex items-center',
                  activeTab === tab ? 'border-neon-cyan text-neon-cyan' : 'border-transparent text-txt-secondary hover:text-txt-primary']">
@@ -127,54 +184,7 @@ async function loadTemplates() {
     </div>
 
     <!-- Providers tab -->
-    <div v-if="activeTab === 'providers'" class="space-y-4">
-      <div v-for="name in providerNames" :key="name" v-if="config.ai_providers">
-        <div v-if="config.ai_providers[name]" class="glass p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold capitalize">{{ name }}</h3>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span v-if="config.ai_providers[name].enabled" class="sev-badge sev-low">Enabled</span>
-              <span v-else class="sev-badge sev-info">Disabled</span>
-              <span v-if="statusOf(name)?.configured" class="sev-badge sev-info">Configured</span>
-              <span v-if="isConnected(name)" class="sev-badge sev-green">✓ Connected</span>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label :for="'api-key-' + name" class="text-xs text-txt-secondary block mb-1">API Key<InfoTip tip="Kunci rahasia dari provider. Didapat dari dashboard akun provider masing-masing. Disimpan terenkripsi di konfigurasi lokal." /></label>
-              <input :id="'api-key-' + name" v-model="config.ai_providers[name].api_key" type="password"
-                     class="input-field" placeholder="sk-..." />
-            </div>
-            <div>
-              <label :for="'provider-model-' + name" class="text-xs text-txt-secondary block mb-1">Model<InfoTip tip="Nama model AI yang dipakai provider ini untuk analisis hasil scan, mis. gpt-4o, claude-3-5-sonnet, atau nama model lokal Ollama." /></label>
-              <input :id="'provider-model-' + name" v-model="config.ai_providers[name].model" type="text"
-                     class="input-field" />
-            </div>
-            <div v-if="name === 'openai' || name === 'ollama' || name === 'openrouter'">
-              <label :for="'base-url-' + name" class="text-xs text-txt-secondary block mb-1">Base URL <span class="text-txt-tertiary">(custom OpenAI-compatible)</span><InfoTip tip="URL endpoint API khusus. Isi jika memakai server OpenAI-compatibel sendiri, Ollama lokal (http://localhost:11434/v1), atau OpenRouter (https://openrouter.ai/api/v1)." /></label>
-              <input :id="'base-url-' + name" v-model="config.ai_providers[name].base_url" type="text"
-                     class="input-field" placeholder="https://your-api.com/v1" />
-            </div>
-            <div>
-              <label :for="'enabled-' + name" class="text-xs text-txt-secondary block mb-1">Enabled<InfoTip tip="Aktifkan provider ini agar ikut dipakai untuk analisis AI. Beberapa provider sekaligus = fallback otomatis saat salah satu gagal." /></label>
-              <label class="flex items-center gap-2 mt-2">
-                <input :id="'enabled-' + name" v-model="config.ai_providers[name].enabled" type="checkbox" class="w-4 h-4 accent-[#00f0ff]" />
-                <span class="text-sm">Active</span>
-              </label>
-            </div>
-          </div>
-          <div class="mt-3 flex items-center gap-3">
-            <button type="button" :disabled="testStatus(name).running" @click="testProvider(name)" class="neon-btn text-sm">
-              {{ testStatus(name).running ? "Testing…" : isKeyless(name) ? "Test Connection" : "Test API Key" }}
-            </button>
-            <span v-if="testStatus(name).result" :class="testStatus(name).result!.ok ? 'text-neon-green' : 'text-sev-critical'" class="text-sm">
-              <template v-if="testStatus(name).result!.ok">✓ Connected · {{ testStatus(name).result!.message }} {{ testStatus(name).result!.ms }}ms</template>
-              <template v-else>✗ {{ testStatus(name).result!.message }}</template>
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
+    <SettingsProviders v-if="activeTab === 'providers'" :config="config" :providers="providers" />
 
     <!-- Scanner tab -->
     <div v-if="activeTab === 'scanner' && config.scanner" class="space-y-4">
@@ -189,20 +199,30 @@ async function loadTemplates() {
             <input id="default-threads" v-model.number="config.scanner.default_threads" type="number" min="1" max="50" class="input-field" />
           </div>
           <div>
-            <label for="ai-provider" class="text-xs text-txt-secondary block mb-1">AI Provider<InfoTip tip="Nama provider AI utama untuk analisis, mis. openai, claude, ollama. Harus salah satu yang sudah diaktifkan di tab Providers." /></label>
-            <input id="ai-provider" v-model="config.scanner.ai_provider" type="text" class="input-field" />
+            <label for="ai-provider" class="text-xs text-txt-secondary block mb-1">AI Provider<InfoTip tip="Pilih provider AI utama untuk analisis. Hanya provider berstatus Aktif di tab Providers yang direkomendasikan; scanner butuh provider aktif untuk jalan." /></label>
+            <select id="ai-provider" v-model="config.scanner.ai_provider" class="input-field">
+              <option value="" disabled>Pilih provider…</option>
+              <option v-for="opt in aiProviderOptions" :key="opt.name" :value="opt.name">
+                {{ opt.name }}{{ opt.active ? " — Aktif" : " — Nonaktif" }}
+              </option>
+            </select>
+            <p v-if="providers.length && activeAiProviderCount === 0" class="text-xs text-amber-400 mt-1">Tidak ada provider aktif — aktifkan di tab Providers.</p>
+            <p v-else-if="config.scanner?.ai_provider && !aiProviderOptions.find((o) => o.name === config.scanner.ai_provider)?.active" class="text-xs text-amber-400 mt-1">Provider terpilih sedang nonaktif — scanner mungkin tidak jalan.</p>
           </div>
           <div>
-            <label for="proxy" class="text-xs text-txt-secondary block mb-1">Proxy<InfoTip tip="Semua request scanner dialihkan lewat proxy ini (format http://host:port). Berguna untuk debugging atau melewati jaringan yang dibatasi." /></label>
-            <input id="proxy" v-model="config.scanner.proxy" type="text" class="input-field" placeholder="http://127.0.0.1:8080" />
+            <label for="proxy" class="text-xs text-txt-secondary block mb-1">Proxy<InfoTip tip="Pilih proxy untuk scan ini. Daftar diambil dari Settings → Proxy (single source). Atur proxy di tab Proxy dulu." /></label>
+            <select id="proxy" v-model="config.scanner.proxy" class="input-field">
+              <option v-for="opt in scannerProxyOptions" :key="opt.value || '__direct'" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <p v-if="scannerProxyOptions.length <= 1" class="text-xs text-txt-tertiary mt-1">Belum ada proxy — atur di tab Proxy atau gunakan Direct.</p>
           </div>
         </div>
       </div>
       <div class="glass p-4">
-        <div class="grid grid-cols-3 gap-3">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <label class="flex items-center gap-2 cursor-pointer">
             <input v-model="config.scanner.enable_recon" type="checkbox" class="w-4 h-4 accent-[#00f0ff]" />
-            <span class="text-sm">Enable Recon<InfoTip tip="Default ON untuk fase pengumpulan informasi (subdomain, teknologi) sebelum scan utama." /></span>
+            <span class="text-sm">Enable Recon<InfoTip tip="Default OFF. Centang untuk aktifkan fase pengumpulan informasi (subdomain, teknologi) sebelum scan utama." /></span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input v-model="config.scanner.full_scan" type="checkbox" class="w-4 h-4 accent-[#00f0ff]" />
@@ -211,6 +231,10 @@ async function loadTemplates() {
           <label class="flex items-center gap-2 cursor-pointer">
             <input v-model="config.scanner.quick_scan" type="checkbox" class="w-4 h-4 accent-[#00f0ff]" />
             <span class="text-sm">Quick Scan<InfoTip tip="Default untuk scan cepat: hanya pengujian paling umum." /></span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input v-model="config.scanner.scan_subdomains" type="checkbox" class="w-4 h-4 accent-[#00f0ff]" />
+            <span class="text-sm">Scan Subdomains<InfoTip tip="Ikut menguji subdomain target (mis. api.domain.com). Experimental — lebih lama & agresif." /></span>
           </label>
         </div>
       </div>
@@ -645,28 +669,7 @@ async function loadTemplates() {
     </div>
 
     <!-- Templates tab -->
-    <div v-if="activeTab === 'templates'" class="space-y-4">
-      <div class="glass p-4 flex items-center justify-between">
-        <div>
-          <h3 class="font-bold">Scan Templates<InfoTip tip="Template deteksi YAML bawaan mesin scan — aturan siap pakai untuk menemukan pola kerentanan tertentu." /></h3>
-          <p class="text-xs text-txt-secondary mt-1">YAML detection templates shipped with the engine</p>
-        </div>
-        <span class="sev-badge sev-info">{{ templates.length }} templates</span>
-      </div>
-      <div v-for="tpl in templates" :key="tpl.path" class="glass p-4 flex items-start justify-between gap-4">
-        <div class="min-w-0">
-          <h4 class="font-bold truncate">{{ tpl.name }}</h4>
-          <p class="text-xs text-txt-tertiary font-mono mt-0.5 break-all">{{ tpl.path }}</p>
-        </div>
-        <div class="flex gap-1 flex-wrap justify-end shrink-0">
-          <span v-for="tag in tpl.tags" :key="tag" class="sev-badge sev-info">{{ tag }}</span>
-          <span v-if="!tpl.tags || !tpl.tags.length" class="sev-badge sev-info">untagged</span>
-        </div>
-      </div>
-      <div v-if="templatesLoaded && !templates.length" class="glass p-6 text-center text-txt-secondary text-sm">
-        No templates found
-      </div>
-    </div>
+    <SettingsTemplates v-if="activeTab === 'templates'" :config="config" />
 
     <!-- Maintenance tab -->
     <div v-if="activeTab === 'maintenance'" class="space-y-4">

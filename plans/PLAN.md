@@ -292,6 +292,27 @@ Expose every deep-eye CLI feature through the UI:
 
 ---
 
+### Phase 3.5 — Template Management (Pre-Docker) ⏳ — scheduled after audit
+
+**Goal**: Make `Settings → Template` editable, not just read-only. Single source remains `scanner/deep-eye/templates/` on disk.
+
+**Tasks:**
+1. ⏳ API: `POST /api/templates` (upload YAML), `PUT /api/templates/{id}` (edit), `DELETE /api/templates/{id}`, `POST /api/templates/reload` (re-parse without restart). Validate via `modules/template_engine/parser.py` (`TemplateError`), reject bad YAML with 400 + message.
+2. ⏳ API: extend `GET /api/templates` to return `id`, `info.severity`, `http` summary, `enabled` (from `templates.enabled` + filter).
+3. ⏳ Web: Templates tab → table with actions: Edit (monaco/code mirror), Duplicate, Delete, Enable/Disable per tag/severity (writes `templates.tag_filters/severity_filter`), Upload YAML, Download.
+4. ⏳ Config: `templates.enabled` toggle + `template_directories` editor in same tab; Save via `PUT /api/config` (existing masked-merge).
+5. ⏳ Safety: write to `templates/custom/` subdir only (preserve shipped `exposures/`/`misconfig/`), backup on overwrite, no direct overwrite of shipped files without confirm.
+6. ⏳ Tests: `api/tests/test_templates_crud.py` (valid/invalid YAML, duplicate id, delete), `web/src/views/Settings.templates.spec.ts` (CRUD UI), loader reload test.
+
+**Acceptance:**
+- CRUD via UI → file appears under `templates/custom/` → `GET /api/templates` lists it → scan with `templates.enabled=true` executes it (via `load_templates`).
+- Invalid YAML rejected, shipped templates protected.
+- No restart needed for reload.
+
+**Commit target**: before `docker-compose.yml`
+
+---
+
 ### Phase 4 — Deploy Hardening ❌
 
 **Tasks:**
@@ -375,6 +396,7 @@ Or single command:
 | 1 | FastAPI bridge + SSE + config + reports | curl full scan lifecycle works | ✅ Done (SSE verified, parser fixed, tests added) | 1fec165 + uncommitted |
 | 2 | Vue UI with all core screens | Browser end-to-end flow works | ✅ UI-complete (7/7 Settings tabs, check selector, ApexCharts, Compare page); manual E2E browser run still pending | uncommitted 2026-08-26 |
 | 3 | All CLI features exposed in UI | Every config section has UI | ✅ Done — all 19 feature groups implemented; backend cov 99.2%, vitest cov 97.8%, Playwright 9 E2E green | uncommitted 2026-08-26 |
+| 3.5 | Template Management CRUD | UI edit/upload/delete/validate templates | ⏳ Planned — after audit, before Docker | — |
 | 4 | Docker deploy + auth + persistence | `docker compose up` serves app | ❌ Not started | — |
 
 ---

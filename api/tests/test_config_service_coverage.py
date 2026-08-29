@@ -1,11 +1,14 @@
-
 import yaml
 
 
 def test_read_write_config(tmp_path):
     cfg_path = tmp_path / "config.yaml"
-    data = {"scanner": {"depth": 2}, "ai_providers": {"openai": {"api_key": "sk-abc12345xyz", "enabled": True}}}
+    data = {
+        "scanner": {"depth": 2},
+        "ai_providers": {"openai": {"api_key": "sk-abc12345xyz", "enabled": True}},
+    }
     from api.services.config_service import read_config, write_config
+
     write_config(data, cfg_path)
     loaded = read_config(cfg_path)
     assert loaded["scanner"]["depth"] == 2
@@ -14,8 +17,10 @@ def test_read_write_config(tmp_path):
     empty.write_text("")
     assert read_config(empty) == {}
 
+
 def test_mask_config_variants():
     from api.services.config_service import mask_config
+
     # Use actual keys checked: api_key, nvd_api_key, github_token, webhook_url, from_address
     data2 = {
         "api_key": "sk-1234567890",
@@ -24,7 +29,7 @@ def test_mask_config_variants():
         "webhook_url": "https://example.com/webhook/abc1234567890",
         "from_address": "a@b.com",
         "nested": {"api_key": "short", "api_key2": "sk-1234567", "nvd_api_key": "nvd"},
-        "normal": "keep"
+        "normal": "keep",
     }
     masked = mask_config(data2)
     # api_key longer than 7 chars masks with prefix/suffix
@@ -32,7 +37,9 @@ def test_mask_config_variants():
     assert "••••" in masked["api_key"]
     assert masked["nvd_api_key"] == "••••"
     assert masked["github_token"] == "••••"
-    assert masked["webhook_url"].endswith("4567890") or masked["webhook_url"].startswith("••••")
+    assert masked["webhook_url"].endswith("4567890") or masked[
+        "webhook_url"
+    ].startswith("••••")
     assert masked["from_address"] == "••••"
     assert masked["normal"] == "keep"
     # nested api_key short
@@ -43,18 +50,33 @@ def test_mask_config_variants():
     assert m2["api_key"] == ""
     assert m2["nvd_api_key"] == ""
 
+
 def test_get_provider_status(monkeypatch, tmp_path):
     cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text(yaml.safe_dump({
-        "ai_providers": {
-            "openai": {"api_key": "sk-123", "enabled": True, "model": "gpt-4", "base_url": "https://api.openai.com"},
-            "ollama": {"base_url": "http://localhost:11434", "enabled": False, "model": "llama"},
-            "claude": {"enabled": True},
-        }
-    }))
+    cfg_path.write_text(
+        yaml.safe_dump(
+            {
+                "ai_providers": {
+                    "openai": {
+                        "api_key": "sk-123",
+                        "enabled": True,
+                        "model": "gpt-4",
+                        "base_url": "https://api.openai.com",
+                    },
+                    "ollama": {
+                        "base_url": "http://localhost:11434",
+                        "enabled": False,
+                        "model": "llama",
+                    },
+                    "claude": {"enabled": True},
+                }
+            }
+        )
+    )
     monkeypatch.setattr("api.services.config_service.CONFIG_PATH", cfg_path)
     monkeypatch.setattr("api.database.CONFIG_PATH", cfg_path)
     from api.services.config_service import get_provider_status
+
     statuses = get_provider_status()
     names = {s["name"] for s in statuses}
     assert "openai" in names
@@ -63,16 +85,38 @@ def test_get_provider_status(monkeypatch, tmp_path):
     assert openai["configured"] is True
     assert openai["model"] == "gpt-4"
     ollama = next(s for s in statuses if s["name"] == "ollama")
-    assert ollama["configured"] is True
+    # Keyless (ollama) requires enabled + base_url; default disabled -> not configured
+    assert ollama["configured"] is False
+    # Same ollama when enabled should be configured
+    cfg_path.write_text(
+        yaml.safe_dump(
+            {
+                "ai_providers": {
+                    "ollama": {
+                        "base_url": "http://localhost:11434",
+                        "enabled": True,
+                        "model": "llama",
+                    },
+                }
+            }
+        )
+    )
+    statuses2 = get_provider_status()
+    ollama2 = next(s for s in statuses2 if s["name"] == "ollama")
+    assert ollama2["configured"] is True
     claude = next(s for s in statuses if s["name"] == "claude")
     assert claude["configured"] is False
 
+
 def test_update_provider(tmp_path, monkeypatch):
     cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text(yaml.safe_dump({"ai_providers": {"openai": {"api_key": "old"}}}))
+    cfg_path.write_text(
+        yaml.safe_dump({"ai_providers": {"openai": {"api_key": "old"}}})
+    )
     monkeypatch.setattr("api.services.config_service.CONFIG_PATH", cfg_path)
     monkeypatch.setattr("api.database.CONFIG_PATH", cfg_path)
     from api.services.config_service import read_config, update_provider
+
     update_provider("openai", {"model": "gpt-4o"})
     assert read_config(cfg_path)["ai_providers"]["openai"]["model"] == "gpt-4o"
     assert read_config(cfg_path)["ai_providers"]["openai"]["api_key"] == "old"

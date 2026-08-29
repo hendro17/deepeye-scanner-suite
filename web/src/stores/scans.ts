@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { api } from "../api/client";
+import { api, type ScanRecord, type CreateScanBody } from "../api/client";
 
 function startScan(id: number) {
   return api.scans.start(id);
@@ -11,7 +11,7 @@ function stopScan(id: number) {
 }
 
 export const useScansStore = defineStore("scans", () => {
-  const scans = ref<any[]>([]);
+  const scans = ref<ScanRecord[]>([]);
   const loading = ref(false);
 
   async function fetchScans() {
@@ -23,7 +23,7 @@ export const useScansStore = defineStore("scans", () => {
     }
   }
 
-  async function createScan(body: any) {
+  async function createScan(body: CreateScanBody) {
     const res = await api.scans.create(body);
     await fetchScans();
     return res;

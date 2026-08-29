@@ -18,26 +18,50 @@ const formats = ref<string[]>(["html"]);
 const authorized = ref(false);
 const submitting = ref(false);
 
-const enableRecon = ref(false);
-const fullScan = ref(false);
-const quickScan = ref(false);
-const scanSubdomains = ref(false);
-
 const secretsEnabled = ref(false);
 const selectedPatterns = ref<string[]>([...ALL_SECRET_PATTERNS]);
+
+// --- Auth for maximal scan behind login ---
+const authMode = ref<"none" | "cookie_headers" | "form_login">("none");
+const authHeadersRaw = ref("");
+const authCookiesRaw = ref("");
+const loginUrl = ref("");
+const loginUsername = ref("");
+const loginPassword = ref("");
+const loginUField = ref("username");
+const loginPField = ref("password");
+
+function parseHeadersCookies(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const trimmed = raw.trim();
+  if (!trimmed) return out;
+  // Try JSON first
+  try {
+    const j = JSON.parse(trimmed);
+    if (j && typeof j === "object") {
+      for (const [k, v] of Object.entries(j)) out[k] = String(v);
+      return out;
+    }
+  } catch {}
+  // Fallback: lines like "Key: Value" or "key=value" or "key value"
+  for (const line of trimmed.split("\n")) {
+    const l = line.trim();
+    if (!l) continue;
+    let sep = l.indexOf(":");
+    if (sep === -1) sep = l.indexOf("=");
+    if (sep === -1) continue;
+    const k = l.slice(0, sep).trim();
+    const v = l.slice(sep + 1).trim();
+    if (k) out[k] = v;
+  }
+  return out;
+}
 
 function togglePattern(id: string) {
   const idx = selectedPatterns.value.indexOf(id);
   if (idx >= 0) selectedPatterns.value.splice(idx, 1);
   else selectedPatterns.value.push(id);
 }
-
-const scanModeOptions = [
-  { id: "enable_recon", label: "Enable Reconnaissance", get: () => enableRecon.value, set: (v: boolean) => (enableRecon.value = v) },
-  { id: "full_scan", label: "Full Scan", get: () => fullScan.value, set: (v: boolean) => (fullScan.value = v) },
-  { id: "quick_scan", label: "Quick Scan", get: () => quickScan.value, set: (v: boolean) => (quickScan.value = v) },
-  { id: "scan_subdomains", label: "Scan Subdomains", get: () => scanSubdomains.value, set: (v: boolean) => (scanSubdomains.value = v) },
-];
 
 const crawlTargets = ref<string[]>([]);
 const ingesting = ref(false);
@@ -60,12 +84,9 @@ const CATEGORY_TIPS: Record<string, string> = {
   parameter_pollution: "Mengirim parameter ganda/berulang (HTTP Parameter Pollution) untuk melewati filter.",
 };
 
-const MODE_TIPS: Record<string, string> = {
-  enable_recon: "Jalankan fase pengumpulan informasi (subdomain, teknologi, aset) sebelum scan utama dimulai.",
-  full_scan: "Scan menyeluruh dengan semua fitur aktif — paling lengkap tapi paling lama.",
-  quick_scan: "Versi cepat: hanya pengujian paling umum. Cocok untuk cek rutin.",
-  scan_subdomains: "Ikut menguji subdomain target (mis. api.domain.com, admin.domain.com).",
-};
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 async function onSpecFile(e: Event) {
   const input = e.target as HTMLInputElement;
@@ -76,8 +97,8 @@ async function onSpecFile(e: Event) {
   try {
     const res = await api.scans.ingestOpenApi(file.name, await file.text());
     crawlTargets.value = res.targets;
-  } catch (err: any) {
-    alert("Failed to parse spec: " + err.message);
+  } catch (err: unknown) {
+    alert("Failed to parse spec: " + getErrorMessage(err));
   } finally {
     ingesting.value = false;
   }
@@ -143,30 +164,40 @@ const selectedCount = computed(() => selectedChecks.value.length);
 const totalCount = ALL_CHECKS.length;
 
 const canSubmit = computed(
-  () => Boolean(targetUrl.value) && authorized.value && selectedCount.value > 0 && !submitting.value,
+  () => targetUrl.value !== "" && authorized.value && selectedCount.value > 0 && !submitting.value,
 );
 
 async function submit() {
   submitting.value = true;
   try {
-    const res = await store.createScan({
+    const body: Record<string, unknown> = {
       target_url: targetUrl.value,
       scope_nl: scopeNl.value || undefined,
       checks: selectedChecks.value,
       threads: threads.value,
       depth: depth.value,
       formats: formats.value,
-      enable_recon: enableRecon.value,
-      full_scan: fullScan.value,
-      quick_scan: quickScan.value,
-      scan_subdomains: scanSubdomains.value,
       secrets_enabled: secretsEnabled.value,
       secret_patterns: secretsEnabled.value ? selectedPatterns.value : undefined,
-    });
+      auth_mode: authMode.value,
+    };
+    if (authMode.value === "cookie_headers") {
+      const h = parseHeadersCookies(authHeadersRaw.value);
+      const c = parseHeadersCookies(authCookiesRaw.value);
+      if (Object.keys(h).length) body.auth_headers = h;
+      if (Object.keys(c).length) body.auth_cookies = c;
+    } else if (authMode.value === "form_login") {
+      body.login_url = loginUrl.value || targetUrl.value;
+      body.login_username = loginUsername.value;
+      body.login_password = loginPassword.value;
+      body.login_username_field = loginUField.value || "username";
+      body.login_password_field = loginPField.value || "password";
+    }
+    const res = await store.createScan(body as unknown as { target_url: string });
     await store.startScan(res.id);
     router.push(`/scan/${res.id}/live`);
-  } catch (e: any) {
-    alert("Failed: " + e.message);
+  } catch (err: unknown) {
+    alert("Failed: " + getErrorMessage(err));
   } finally {
     submitting.value = false;
   }
@@ -305,27 +336,6 @@ async function submit() {
         </div>
       </div>
 
-      <!-- Recon & Scan Mode -->
-      <div class="glass p-5">
-        <p class="text-sm font-medium block mb-3">Recon &amp; Scan Mode<InfoTip tip="Mode tambahan untuk mengatur perilaku scan. Semua bersifat opsional dan bisa dikombinasikan." /></p>
-        <ul class="grid gap-2 sm:grid-cols-2">
-          <li v-for="opt in scanModeOptions" :key="opt.id">
-            <div class="flex items-center gap-2.5 cursor-pointer select-none" @click="opt.set(!opt.get())">
-              <button type="button" role="switch" :aria-checked="opt.get()"
-                      :aria-label="opt.label"
-                      @click.stop="opt.set(!opt.get())"
-                      class="relative shrink-0 w-10 h-[22px] rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neon-cyan"
-                      :class="opt.get() ? 'bg-[rgba(0,240,255,0.35)]' : 'bg-[rgba(255,255,255,0.08)]'">
-                <span aria-hidden="true"
-                      class="absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full transition-transform duration-150"
-                      :class="opt.get() ? 'translate-x-[18px] bg-neon-cyan' : 'translate-x-0 bg-txt-tertiary'"></span>
-              </button>
-              <span class="text-sm" :class="opt.get() ? 'text-txt-primary' : 'text-txt-secondary'">{{ opt.label }}<InfoTip :tip="MODE_TIPS[opt.id]" /></span>
-            </div>
-          </li>
-        </ul>
-      </div>
-
       <!-- Secrets Scanner -->
       <div class="glass p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -351,6 +361,64 @@ async function submit() {
                       : 'text-txt-secondary border-[rgba(0,240,255,0.12)] hover:border-[rgba(0,240,255,0.25)]']">
             {{ p.label }}
           </button>
+        </div>
+      </div>
+
+      <!-- Authentication (maximal scan behind login) -->
+      <div class="glass p-5">
+        <p class="text-sm font-medium block mb-3">Authentication <span class="text-txt-tertiary">(optional - untuk scan maksimal di balik login)</span><InfoTip tip="Pilih mode auth agar crawler bisa masuk ke halaman terproteksi. None = publik saja. Cookie/Headers = paste session/token dari DevTools. Form Login = scanner login otomatis pakai username/password dan handle CSRF." /></p>
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button type="button" @click="authMode = 'none'"
+                  :class="['px-3 py-1.5 rounded text-xs font-medium border transition-all',
+                    authMode === 'none' ? 'bg-[rgba(0,240,255,0.15)] text-neon-cyan border-[rgba(0,240,255,0.4)]' : 'text-txt-secondary border-[rgba(0,240,255,0.12)]']">None (publik)</button>
+          <button type="button" @click="authMode = 'cookie_headers'"
+                  :class="['px-3 py-1.5 rounded text-xs font-medium border transition-all',
+                    authMode === 'cookie_headers' ? 'bg-[rgba(0,240,255,0.15)] text-neon-cyan border-[rgba(0,240,255,0.4)]' : 'text-txt-secondary border-[rgba(0,240,255,0.12)]']">Cookie / Headers</button>
+          <button type="button" @click="authMode = 'form_login'"
+                  :class="['px-3 py-1.5 rounded text-xs font-medium border transition-all',
+                    authMode === 'form_login' ? 'bg-[rgba(0,240,255,0.15)] text-neon-cyan border-[rgba(0,240,255,0.4)]' : 'text-txt-secondary border-[rgba(0,240,255,0.12)]']">Form Login</button>
+        </div>
+
+        <div v-if="authMode === 'cookie_headers'" class="space-y-3">
+          <div>
+            <label class="text-xs font-medium block mb-1">Custom Headers <span class="text-txt-tertiary">(JSON atau per baris "Key: Value")</span></label>
+            <textarea v-model="authHeadersRaw" rows="3" placeholder='{"Authorization": "Bearer xxx"} atau&#10;Authorization: Bearer xxx'
+                      class="input-field font-mono text-xs"></textarea>
+          </div>
+          <div>
+            <label class="text-xs font-medium block mb-1">Cookies <span class="text-txt-tertiary">(JSON atau per baris "key=value" / "key: value")</span></label>
+            <textarea v-model="authCookiesRaw" rows="3" placeholder='{"session": "abc123"} atau&#10;session=abc123'
+                      class="input-field font-mono text-xs"></textarea>
+          </div>
+          <p class="text-[11px] text-txt-tertiary">Copy dari DevTools → Application → Cookies / Network → Request Headers. Dikirim di setiap request crawl & scan.</p>
+        </div>
+
+        <div v-if="authMode === 'form_login'" class="space-y-3">
+          <div>
+            <label class="text-xs font-medium block mb-1">Login URL</label>
+            <input v-model="loginUrl" type="text" :placeholder="targetUrl || 'https://example.com/login'" class="input-field font-mono text-xs" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-medium block mb-1">Username / Email</label>
+              <input v-model="loginUsername" type="text" placeholder="admin@example.com" class="input-field text-xs" />
+            </div>
+            <div>
+              <label class="text-xs font-medium block mb-1">Password</label>
+              <input v-model="loginPassword" type="password" placeholder="••••••••" class="input-field text-xs" />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-medium block mb-1">Username field name</label>
+              <input v-model="loginUField" type="text" placeholder="username" class="input-field font-mono text-xs" />
+            </div>
+            <div>
+              <label class="text-xs font-medium block mb-1">Password field name</label>
+              <input v-model="loginPField" type="text" placeholder="password" class="input-field font-mono text-xs" />
+            </div>
+          </div>
+          <p class="text-[11px] text-txt-tertiary">Scanner akan GET login page → extract CSRF (csrf_token/_token/authenticity_token) → POST credentials → crawl sebagai user login. Cek field name via Inspect → &lt;input name="..."&gt; di form login.</p>
         </div>
       </div>
 

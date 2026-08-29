@@ -14,21 +14,17 @@ function formatDuration(seconds: number): string {
 
 const stats = computed(() => {
   const total = store.scans.length;
-  const running = store.scans.filter(s => s.status === "running").length;
-  const completed = store.scans.filter(s => s.status === "completed").length;
+  const running = store.scans.filter(s => String(s.status) === "running").length;
+  const completed = store.scans.filter(s => String(s.status) === "completed").length;
   const durations = store.scans
-    .filter(s => s.status === "completed" && s.started_at && s.ended_at)
-    .map(s => (new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 1000)
+    .filter(s => String(s.status) === "completed" && s.started_at && s.ended_at)
+    .map(s => (new Date(String(s.ended_at)).getTime() - new Date(String(s.started_at)).getTime()) / 1000)
     .filter(d => d >= 0);
   const avgDuration = durations.length
     ? formatDuration(durations.reduce((a, b) => a + b, 0) / durations.length)
     : "—";
   return { total, running, completed, avgDuration };
 });
-
-const sevColors: Record<string, string> = {
-  critical: "#ff3366", high: "#ff6644", medium: "#ffaa00", low: "#4a9eff", info: "#6b7d99",
-};
 
 const statusBadge: Record<string, string> = {
   running: "sev-low", completed: "sev-medium", failed: "sev-critical",
@@ -40,7 +36,7 @@ const chartsReady = typeof window !== "undefined" && "ResizeObserver" in window;
 const severitySeries = computed(() => {
   const counts = [0, 0, 0, 0, 0];
   for (const scan of store.scans) {
-    const sc = scan.severity_counts;
+    const sc = scan.severity_counts as Record<string, number> | undefined;
     if (!sc) continue;
     counts[0] += sc.critical ?? 0;
     counts[1] += sc.high ?? 0;
@@ -95,11 +91,11 @@ function lastSevenDays() {
 const historyDays = lastSevenDays();
 
 const historySeries = computed(() => {
-  const data = new Array(7).fill(0);
+  const data = new Array(7).fill(0) as number[];
   for (const scan of store.scans) {
     const idx = historyDays.keys.indexOf(String(scan.created_at ?? "").slice(0, 10));
     if (idx === -1) continue;
-    const sc = scan.severity_counts ?? {};
+    const sc = (scan.severity_counts ?? {}) as Record<string, number>;
     data[idx] += (sc.critical ?? 0) + (sc.high ?? 0) + (sc.medium ?? 0) + (sc.low ?? 0) + (sc.info ?? 0);
   }
   return [{ name: "Vulnerabilities", data }];
@@ -179,11 +175,11 @@ onMounted(() => store.fetchScans());
           <tr v-for="scan in store.scans.slice(0, 10)" :key="scan.id"
               class="border-b border-[rgba(255,255,255,0.03)] hover:bg-[rgba(0,240,255,0.03)] transition-colors">
             <td class="py-2 font-mono text-neon-cyan">#{{ scan.id }}</td>
-            <td class="py-2 truncate max-w-xs">{{ scan.target }}</td>
+            <td class="py-2 truncate max-w-xs">{{ String(scan.target ?? "") }}</td>
             <td class="py-2">
-              <span :class="['sev-badge', statusBadge[scan.status]]">{{ scan.status }}</span>
+              <span :class="['sev-badge', statusBadge[String(scan.status)] ?? 'sev-info']">{{ scan.status }}</span>
             </td>
-            <td class="py-2 text-txt-secondary">{{ scan.created_at?.slice(0, 19) }}</td>
+            <td class="py-2 text-txt-secondary">{{ String(scan.created_at ?? "").slice(0, 19) }}</td>
             <td class="py-2">
               <RouterLink :to="`/scan/${scan.id}/findings`" class="text-neon-cyan hover:underline text-xs">View</RouterLink>
             </td>

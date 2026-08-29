@@ -2,13 +2,21 @@
 import { ref, onMounted, computed } from "vue";
 import { api } from "../api/client";
 
-const scans = ref<any[]>([]);
+type ScanRecord = Record<string, unknown> & { id: number; status: string; target?: string };
+type CompareResult = Record<string, unknown> & {
+  new_count: number; resolved_count: number; persisting_count: number;
+  new_vulnerabilities: Record<string, unknown>[];
+  resolved_vulnerabilities: Record<string, unknown>[];
+  severity_changes: Array<Record<string, unknown> & { type: string; url: string; parameter?: string; severity_a: string; severity_b: string }>;
+};
+
+const scans = ref<ScanRecord[]>([]);
 const loadingScans = ref(true);
 const scanIdA = ref<number | "">("");
 const scanIdB = ref<number | "">("");
 const comparing = ref(false);
 const error = ref("");
-const result = ref<any>(null);
+const result = ref<CompareResult | null>(null);
 const expandedSection = ref<string>("new");
 
 const selectable = computed(() =>
@@ -21,16 +29,17 @@ const canCompare = computed(() =>
 
 const sections = computed(() => {
   if (!result.value) return [];
+  const r = result.value;
   return [
-    { key: "new", label: "New", count: result.value.new_count, items: result.value.new_vulnerabilities },
-    { key: "resolved", label: "Resolved", count: result.value.resolved_count, items: result.value.resolved_vulnerabilities },
-    { key: "persisting", label: "Persisting", count: result.value.persisting_count, items: null },
+    { key: "new", label: "New", count: r.new_count, items: r.new_vulnerabilities },
+    { key: "resolved", label: "Resolved", count: r.resolved_count, items: r.resolved_vulnerabilities },
+    { key: "persisting", label: "Persisting", count: r.persisting_count, items: null as unknown as Record<string, unknown>[] | null },
   ];
 });
 
 onMounted(async () => {
   try {
-    scans.value = await api.scans.list();
+    scans.value = await api.scans.list() as ScanRecord[];
   } finally {
     loadingScans.value = false;
   }
@@ -42,9 +51,9 @@ async function compare() {
   error.value = "";
   result.value = null;
   try {
-    result.value = await api.scans.compare(Number(scanIdA.value), Number(scanIdB.value));
-  } catch (e: any) {
-    error.value = e?.message || "Comparison failed.";
+    result.value = await api.scans.compare(Number(scanIdA.value), Number(scanIdB.value)) as CompareResult;
+  } catch (err: unknown) {
+    error.value = err instanceof Error ? err.message : String(err) || "Comparison failed.";
   } finally {
     comparing.value = false;
   }
@@ -113,11 +122,11 @@ async function compare() {
                 class="border-b border-[rgba(255,255,255,0.03)]">
               <td class="py-2 font-mono text-xs">{{ c.type }}</td>
               <td class="py-2 truncate max-w-md text-txt-secondary">{{ c.url }}</td>
-              <td class="py-2 font-mono text-xs">{{ c.parameter || "—" }}</td>
+              <td class="py-2 font-mono text-xs">{{ (c.parameter as string) || "—" }}</td>
               <td class="py-2">
-                <span :class="['sev-badge', `sev-${c.severity_a}`]">{{ c.severity_a }}</span>
+                <span :class="['sev-badge', `sev-${String(c.severity_a)}`]">{{ c.severity_a }}</span>
                 →
-                <span :class="['sev-badge', `sev-${c.severity_b}`]">{{ c.severity_b }}</span>
+                <span :class="['sev-badge', `sev-${String(c.severity_b)}`]">{{ c.severity_b }}</span>
               </td>
             </tr>
           </tbody>
@@ -154,10 +163,10 @@ async function compare() {
             <tbody>
               <tr v-for="(f, i) in section.items" :key="i"
                   class="border-b border-[rgba(255,255,255,0.03)] hover:bg-[rgba(0,240,255,0.03)] transition-colors">
-                <td class="py-2"><span :class="['sev-badge', `sev-${f.severity}`]">{{ f.severity }}</span></td>
-                <td class="py-2 font-mono text-xs">{{ f.type }}</td>
-                <td class="py-2 truncate max-w-md text-txt-secondary">{{ f.url }}</td>
-                <td class="py-2 font-mono text-xs">{{ f.parameter || "—" }}</td>
+                <td class="py-2"><span :class="['sev-badge', `sev-${String((f as Record<string, unknown>).severity)}`]">{{ (f as Record<string, unknown>).severity }}</span></td>
+                <td class="py-2 font-mono text-xs">{{ (f as Record<string, unknown>).type }}</td>
+                <td class="py-2 truncate max-w-md text-txt-secondary">{{ (f as Record<string, unknown>).url }}</td>
+                <td class="py-2 font-mono text-xs">{{ ((f as Record<string, unknown>).parameter as string) || "—" }}</td>
               </tr>
             </tbody>
           </table>

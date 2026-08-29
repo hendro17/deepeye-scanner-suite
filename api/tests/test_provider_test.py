@@ -1,10 +1,7 @@
 """Hermetic tests for POST /api/providers/test/{name} — no real subprocess/network."""
+
 import json
 import subprocess
-
-import pytest
-
-import api.services.provider_test as pt
 
 
 def _fake_run(monkeypatch, stdout: str):
@@ -27,7 +24,9 @@ def test_unknown_provider_no_subprocess(client, monkeypatch):
         "api.services.provider_test.subprocess.run",
         lambda *a, **k: calls.append(a),
     )
-    r = client.post("/api/providers/test/not_a_provider", json={"config": {"api_key": "x"}})
+    r = client.post(
+        "/api/providers/test/not_a_provider", json={"config": {"api_key": "x"}}
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["success"] is False
@@ -38,7 +37,9 @@ def test_unknown_provider_no_subprocess(client, monkeypatch):
 
 def test_success_path(client, monkeypatch):
     calls, kw_calls = _fake_run(monkeypatch, '{"ok": true, "error": null}')
-    r = client.post("/api/providers/test/openai", json={"config": {"api_key": "sk-test-123"}})
+    r = client.post(
+        "/api/providers/test/openai", json={"config": {"api_key": "sk-test-123"}}
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["provider"] == "openai"
@@ -60,7 +61,9 @@ def test_success_path(client, monkeypatch):
 
 def test_failure_path(client, monkeypatch):
     _fake_run(monkeypatch, '{"ok": false, "error": "401 Unauthorized: bad key"}')
-    r = client.post("/api/providers/test/openai", json={"config": {"api_key": "sk-bad"}})
+    r = client.post(
+        "/api/providers/test/openai", json={"config": {"api_key": "sk-bad"}}
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["success"] is False

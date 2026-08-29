@@ -6,27 +6,35 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
+export type ScanRecord = Record<string, unknown> & { id: number; status: string };
+export type HealthResponse = { status: string };
+export type ConfigResponse = { config: Record<string, unknown>; masked: boolean };
+export type ProviderStatus = Record<string, unknown> & { name: string };
+export type TemplateInfo = Record<string, unknown> & { id?: string; name?: string; path: string };
+export type ReportInfo = Record<string, unknown> & { filename: string; format: string; size: number };
+export type CreateScanBody = Record<string, unknown> & { target_url: string };
+
 export const api = {
-  health: () => request<{ status: string }>("/health"),
+  health: () => request<HealthResponse>("/health"),
 
   scans: {
-    list: () => request<any[]>("/scans"),
-    get: (id: number) => request<any>(`/scans/${id}`),
-    create: (body: any) =>
+    list: () => request<ScanRecord[]>("/scans"),
+    get: (id: number) => request<ScanRecord>(`/scans/${id}`),
+    create: (body: CreateScanBody) =>
       request<{ id: number; status: string }>("/scans", {
         method: "POST",
         body: JSON.stringify(body),
       }),
     start: (id: number) =>
-      request<any>(`/scans/${id}/start`, { method: "POST" }),
+      request<Record<string, unknown>>(`/scans/${id}/start`, { method: "POST" }),
     stop: (id: number) =>
-      request<any>(`/scans/${id}/stop`, { method: "POST" }),
-    findings: (id: number) => request<any>(`/scans/${id}/findings`),
+      request<Record<string, unknown>>(`/scans/${id}/stop`, { method: "POST" }),
+    findings: (id: number) => request<{ vulnerabilities: Record<string, unknown>[]; total?: number }>(`/scans/${id}/findings`),
     compare: (scanIdA: number, scanIdB: number) =>
-      request<any>("/scans/compare", {
+      request<Record<string, unknown>>("/scans/compare", {
         method: "POST",
         body: JSON.stringify({ scan_id_a: scanIdA, scan_id_b: scanIdB }),
       }),
@@ -39,8 +47,8 @@ export const api = {
   },
 
   config: {
-    get: () => request<{ config: any; masked: boolean }>("/config"),
-    update: (config: any) =>
+    get: () => request<ConfigResponse>("/config"),
+    update: (config: Record<string, unknown>) =>
       request<{ success: boolean }>("/config", {
         method: "PUT",
         body: JSON.stringify({ config }),
@@ -48,27 +56,32 @@ export const api = {
   },
 
   providers: {
-    status: () => request<any[]>("/providers/status"),
-    test: (name: string, body?: any) =>
-      request<any>(`/providers/test/${name}`, {
+    status: () => request<ProviderStatus[]>("/providers/status"),
+    test: (name: string, body?: Record<string, unknown>) =>
+      request<Record<string, unknown>>(`/providers/test/${name}`, {
         method: "POST",
         body: JSON.stringify(body ?? {}),
       }),
   },
 
   reports: {
-    list: () => request<any[]>("/reports"),
+    list: () => request<ReportInfo[]>("/reports"),
     downloadUrl: (filename: string) => `${BASE}/reports/${filename}`,
   },
 
   maintenance: {
     updateCve: () =>
-      request<any>("/maintenance/update-cve", { method: "POST" }),
+      request<Record<string, unknown>>("/maintenance/update-cve", { method: "POST" }),
     buildRag: () =>
-      request<any>("/maintenance/build-rag", { method: "POST" }),
+      request<Record<string, unknown>>("/maintenance/build-rag", { method: "POST" }),
   },
 
   templates: {
-    list: () => request<any[]>("/templates"),
+    list: () => request<TemplateInfo[]>("/templates"),
+    get: (id: string) => request<{ content: string } & Record<string, unknown>>(`/templates/${id}`),
+    create: (body: Record<string, unknown>) => request<Record<string, unknown>>("/templates", { method: "POST", body: JSON.stringify(body) }),
+    update: (id: string, body: Record<string, unknown>) => request<Record<string, unknown>>(`/templates/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    remove: (id: string) => fetch(`${BASE}/templates/${id}`, { method: "DELETE" }).then(async (r) => { if (!r.ok) throw new Error(`API ${r.status}: ${await r.text()}`); }),
+    reload: () => request<Record<string, unknown>>("/templates/reload", { method: "POST" }),
   },
 };

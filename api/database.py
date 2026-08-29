@@ -62,6 +62,7 @@ def init_db():
 
 def job_to_dict(row: sqlite3.Row) -> dict:
     import json
+
     d = dict(row)
     d["args"] = json.loads(d.pop("args_json", "{}"))
     return d
@@ -69,6 +70,7 @@ def job_to_dict(row: sqlite3.Row) -> dict:
 
 def finding_to_dict(row: sqlite3.Row) -> dict:
     import json
+
     d = dict(row)
     if d.get("cve_refs"):
         d["cve_references"] = json.loads(d.pop("cve_refs"))
@@ -76,5 +78,9 @@ def finding_to_dict(row: sqlite3.Row) -> dict:
         d["cve_references"] = None
         d.pop("cve_refs", None)
     d["ai_evidence_summary"] = d.pop("ai_summary", None)
-    d["false_positive"] = bool(d.pop("false_positive", 0)) if d.get("false_positive") is not None else None
+    d["false_positive"] = (
+        bool(d.pop("false_positive", 0))
+        if d.get("false_positive") is not None
+        else None
+    )
     return d

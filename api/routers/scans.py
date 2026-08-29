@@ -27,6 +27,15 @@ class ScanCreate(BaseModel):
     scan_subdomains: bool = False
     secrets_enabled: bool = False
     secret_patterns: list[str] | None = None
+    # --- Auth: maximal scan behind login ---
+    auth_mode: str = "none"  # none | cookie_headers | form_login
+    auth_headers: dict[str, str] | None = None
+    auth_cookies: dict[str, str] | None = None
+    login_url: str | None = None
+    login_username: str | None = None
+    login_password: str | None = None
+    login_username_field: str | None = "username"
+    login_password_field: str | None = "password"
 
     @field_validator("target_url")
     @classmethod
@@ -59,6 +68,13 @@ class ScanCreate(BaseModel):
     def validate_threads(cls, v):
         if not 1 <= v <= 50:
             raise ValueError("threads must be 1-50")
+        return v
+
+    @field_validator("auth_mode")
+    @classmethod
+    def validate_auth_mode(cls, v):
+        if v not in ("none", "cookie_headers", "form_login"):
+            raise ValueError("auth_mode must be none, cookie_headers, or form_login")
         return v
 
 
@@ -141,7 +157,9 @@ def _build_targets(bases: list[str], paths: list[str]) -> list[str]:
     return targets
 
 
-@router.post("/ingest-openapi", responses={400: {"description": "Invalid JSON/YAML spec"}})
+@router.post(
+    "/ingest-openapi", responses={400: {"description": "Invalid JSON/YAML spec"}}
+)
 async def ingest_openapi(body: OpenApiIngest):
     spec = _parse_spec(body.content)
     bases = _extract_bases(spec)

@@ -3,9 +3,11 @@ import { ref, onMounted, computed } from "vue";
 import { useRoute, RouterLink } from "vue-router";
 import { api } from "../api/client";
 
+type Finding = Record<string, unknown> & { severity: string; type: string; url: string; parameter?: string; payload?: string; evidence?: string; remediation?: string; ai_evidence_summary?: string; cve_references?: string[] };
+
 const route = useRoute();
 const scanId = Number(route.params.id);
-const findings = ref<any[]>([]);
+const findings = ref<Finding[]>([]);
 const loading = ref(true);
 const search = ref("");
 const severityFilter = ref("");
@@ -14,21 +16,21 @@ const expanded = ref<number | null>(null);
 const filtered = computed(() =>
   findings.value.filter(f => {
     if (severityFilter.value && f.severity !== severityFilter.value) return false;
-    if (search.value && !`${f.type} ${f.url} ${f.payload || ""}`.toLowerCase().includes(search.value.toLowerCase())) return false;
+    if (search.value && !`${String(f.type)} ${String(f.url)} ${String(f.payload ?? "")}`.toLowerCase().includes(search.value.toLowerCase())) return false;
     return true;
   })
 );
 
 const severityCounts = computed(() => {
   const counts: Record<string, number> = {};
-  for (const f of findings.value) counts[f.severity] = (counts[f.severity] || 0) + 1;
+  for (const f of findings.value) counts[String(f.severity)] = (counts[String(f.severity)] || 0) + 1;
   return counts;
 });
 
 onMounted(async () => {
   try {
     const res = await api.scans.findings(scanId);
-    findings.value = res.vulnerabilities || [];
+    findings.value = (res.vulnerabilities as Finding[]) || [];
   } finally {
     loading.value = false;
   }
@@ -45,7 +47,6 @@ onMounted(async () => {
       <RouterLink :to="`/scan/${scanId}/reports`" class="text-neon-cyan text-sm hover:underline">Reports →</RouterLink>
     </div>
 
-    <!-- Severity badges -->
     <div class="flex gap-2 mb-4" v-if="!loading">
       <button v-for="sev in ['critical', 'high', 'medium', 'low', 'info']" :key="sev"
               @click="severityFilter = severityFilter === sev ? '' : sev"
@@ -54,7 +55,6 @@ onMounted(async () => {
       </button>
     </div>
 
-    <!-- Search -->
     <template v-if="!loading">
       <label for="findings-search" class="sr-only">Search findings</label>
       <input id="findings-search" v-model="search" type="text" placeholder="Search findings..."
@@ -76,7 +76,7 @@ onMounted(async () => {
         <template v-for="(f, i) in filtered" :key="i">
           <tr @click="expanded = expanded === i ? null : i"
               class="border-b border-[rgba(255,255,255,0.03)] cursor-pointer hover:bg-[rgba(0,240,255,0.03)] transition-colors">
-            <td class="py-2"><span :class="['sev-badge', `sev-${f.severity}`]">{{ f.severity }}</span></td>
+            <td class="py-2"><span :class="['sev-badge', `sev-${String(f.severity)}`]">{{ f.severity }}</span></td>
             <td class="py-2 font-mono text-xs">{{ f.type }}</td>
             <td class="py-2 truncate max-w-md text-txt-secondary">{{ f.url }}</td>
             <td class="py-2 text-txt-tertiary text-xs">{{ expanded === i ? "▲" : "▼" }}</td>
