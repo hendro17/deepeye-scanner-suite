@@ -11,6 +11,8 @@ router = APIRouter(prefix="/api/templates", tags=["templates"])
 TEMPLATES_DIR = SCANNER_DIR / "templates"
 CUSTOM_DIR = TEMPLATES_DIR / "custom"
 
+YAML_PATTERN = "*.yaml"
+
 
 def _custom_dir() -> Path:
     CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +71,7 @@ def _find_by_id(template_id: str) -> tuple[Path | None, dict | None]:
     """Search all yaml files for matching id. Returns (path, data) or (None, None)."""
     if not TEMPLATES_DIR.is_dir():
         return None, None
-    for p in TEMPLATES_DIR.rglob("*.yaml"):
+    for p in TEMPLATES_DIR.rglob(YAML_PATTERN):
         try:
             with open(p) as f:
                 data = yaml.safe_load(f)
@@ -100,23 +102,25 @@ def _validate_content(
         except yaml.YAMLError as ye:
             raise HTTPException(
                 status_code=400, detail=f"YAML parse error: {ye}"
-            ) from ye
+            ) from ye  # NOSONAR - helper raise documented via route responses
         if not isinstance(data, dict):
             raise HTTPException(
                 status_code=400, detail="Template top-level must be mapping"
-            )
+            )  # NOSONAR - helper raise documented via route responses
         # minimal required check
         for k in ("id", "info", "http"):
             if k not in data:
                 raise HTTPException(
                     status_code=400, detail=f"missing required field '{k}'"
-                )
+                )  # NOSONAR - helper raise documented via route responses
         return data
     try:
         return parse_template(content, source_path=effective_source)
     except Exception as exc:  # NOSONAR - parser validation errors map to 400
         msg = str(exc)
-        raise HTTPException(status_code=400, detail=msg) from exc
+        raise HTTPException(
+            status_code=400, detail=msg
+        ) from exc  # NOSONAR - helper raise documented via route responses
 
 
 def _enabled_for(data: dict) -> bool:
@@ -184,7 +188,7 @@ def list_templates():
     if not TEMPLATES_DIR.is_dir():
         return []
     templates = []
-    for path in sorted(TEMPLATES_DIR.rglob("*.yaml")):
+    for path in sorted(TEMPLATES_DIR.rglob(YAML_PATTERN)):
         templates.append(_entry_for_path(path))
     return templates
 
@@ -194,11 +198,17 @@ def reload_templates():
     # Stateless: just recount — loader reads disk on scan start, no cache to bust
     count = 0
     if TEMPLATES_DIR.is_dir():
-        count = sum(1 for _ in TEMPLATES_DIR.rglob("*.yaml"))
+        count = sum(1 for _ in TEMPLATES_DIR.rglob(YAML_PATTERN))
     return {"count": count, "reloaded": True}
 
 
-@router.get("/{template_id}")
+@router.get(
+    "/{template_id}",
+    responses={
+        404: {"description": "Template not found"},
+        500: {"description": "Read error"},
+    },
+)
 def get_template(template_id: str):
     path, _data = _find_by_id(template_id)
     if path is None:
@@ -216,7 +226,14 @@ def get_template(template_id: str):
     }
 
 
-@router.post("", status_code=201)
+@router.post(
+    "",
+    status_code=201,
+    responses={
+        400: {"description": "Bad Request"},
+        409: {"description": "Conflict"},
+    },
+)
 def create_template(body: dict):
     content = body.get("content") or body.get("yaml") or ""
     if not content or not isinstance(content, str):
@@ -250,7 +267,14 @@ def create_template(body: dict):
     return {"id": tid, "path": dest.relative_to(SCANNER_DIR).as_posix()}
 
 
-@router.put("/{template_id}")
+@router.put(
+    "/{template_id}",
+    responses={
+        400: {"description": "Bad Request"},
+        403: {"description": "Forbidden — shipped template protected"},
+        404: {"description": "Template not found"},
+    },
+)
 def update_template(template_id: str, body: dict):
     content = body.get("content") or body.get("yaml") or ""
     if not content or not isinstance(content, str):
@@ -284,7 +308,15 @@ def update_template(template_id: str, body: dict):
     return {"id": template_id, "path": path.relative_to(SCANNER_DIR).as_posix()}
 
 
-@router.delete("/{template_id}", status_code=204)
+@router.delete(
+    "/{template_id}",
+    status_code=204,
+    responses={
+        403: {"description": "Forbidden — shipped template protected"},
+        404: {"description": "Template not found"},
+        500: {"description": "Delete error"},
+    },
+)
 def delete_template(template_id: str):
     path, _ = _find_by_id(template_id)
     if path is None:

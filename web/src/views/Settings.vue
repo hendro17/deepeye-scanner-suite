@@ -57,30 +57,47 @@ const aiProviderOptions = computed(() => {
 
 const activeAiProviderCount = computed(() => aiProviderOptions.value.filter((o) => o.active).length);
 
-const scannerProxyOptions = computed(() => {
-  const opts: { label: string; value: string }[] = [{ label: "Direct — tanpa proxy", value: "" }];
-  const cfg = config.value as Record<string, Record<string, unknown> & { enabled?: boolean; proxy_port?: number; bind_host?: string; http?: string; https?: string; proxy_pool?: string[]; proxy?: string }>;
+type ScannerProxyCfg = Record<string, Record<string, unknown> & { enabled?: boolean; proxy_port?: number; bind_host?: string; http?: string; https?: string; proxy_pool?: string[]; proxy?: string }>;
+
+function appendInterceptingProxy(cfg: ScannerProxyCfg, opts: { label: string; value: string }[]): void {
   const ip = cfg.intercepting_proxy as Record<string, unknown> | undefined;
-  if (ip && typeof ip.enabled === "boolean" && ip.enabled && typeof ip.proxy_port === "number" && ip.proxy_port) {
-    const host = typeof ip.bind_host === "string" && ip.bind_host ? ip.bind_host : "127.0.0.1";
-    const url = `http://${host}:${String(ip.proxy_port)}`;
-    opts.push({ label: `Intercepting (mitmweb) — ${url}`, value: url });
-  }
+  if (!ip || typeof ip.enabled !== "boolean" || !ip.enabled) return;
+  if (typeof ip.proxy_port !== "number" || !ip.proxy_port) return;
+  const host = typeof ip.bind_host === "string" && ip.bind_host ? ip.bind_host : "127.0.0.1";
+  const url = `http://${host}:${String(ip.proxy_port)}`;
+  opts.push({ label: `Intercepting (mitmweb) — ${url}`, value: url });
+}
+
+function appendHttpProxies(cfg: ScannerProxyCfg, opts: { label: string; value: string }[]): void {
   const px = cfg.proxy as Record<string, unknown> | undefined;
-  if (px && px.enabled) {
-    if (typeof px.http === "string" && px.http) opts.push({ label: `HTTP Proxy — ${px.http}`, value: px.http });
-    if (typeof px.https === "string" && px.https && px.https !== px.http) opts.push({ label: `HTTPS Proxy — ${px.https}`, value: String(px.https) });
-  }
+  if (!px || !px.enabled) return;
+  if (typeof px.http === "string" && px.http) opts.push({ label: `HTTP Proxy — ${px.http}`, value: px.http });
+  if (typeof px.https === "string" && px.https && px.https !== px.http) opts.push({ label: `HTTPS Proxy — ${px.https}`, value: String(px.https) });
+}
+
+function appendProxyPool(cfg: ScannerProxyCfg, opts: { label: string; value: string }[]): void {
   const advanced = cfg.advanced as Record<string, unknown> | undefined;
   const pool: string[] = Array.isArray(advanced?.proxy_pool) ? (advanced.proxy_pool as string[]) : [];
   pool.forEach((p: string, i: number) => {
-    if (p && !opts.some((o) => o.value === p)) opts.push({ label: `Pool #${i + 1} — ${p}`, value: p });
+    if (!p || opts.some((o) => o.value === p)) return;
+    opts.push({ label: `Pool #${i + 1} — ${p}`, value: p });
   });
+}
+
+function appendCustomProxy(cfg: ScannerProxyCfg, opts: { label: string; value: string }[]): void {
   const scanner = cfg.scanner as Record<string, unknown> | undefined;
   const cur = typeof scanner?.proxy === "string" ? scanner.proxy : "";
-  if (cur && !opts.some((o) => o.value === cur)) {
-    opts.push({ label: `Custom — ${cur}`, value: cur });
-  }
+  if (!cur || opts.some((o) => o.value === cur)) return;
+  opts.push({ label: `Custom — ${cur}`, value: cur });
+}
+
+const scannerProxyOptions = computed(() => {
+  const opts: { label: string; value: string }[] = [{ label: "Direct — tanpa proxy", value: "" }];
+  const cfg = config.value as ScannerProxyCfg;
+  appendInterceptingProxy(cfg, opts);
+  appendHttpProxies(cfg, opts);
+  appendProxyPool(cfg, opts);
+  appendCustomProxy(cfg, opts);
   return opts;
 });
 

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from fastapi import HTTPException
 
 from api.routers import templates as tpl
 
@@ -164,15 +165,15 @@ def test_validate_content_fallback_paths(tdir):
     # force import failure by ensuring scanner_root not importable and parser unavailable
     # fallback is triggered when import fails; we test 400 cases
     # scalar top-level -> 400 must be mapping
-    with pytest.raises(Exception) as ei:
+    with pytest.raises(HTTPException) as ei:
         tpl._validate_content(SCALAR_YAML)
     assert ei.value.status_code == 400
     # invalid yaml parse error -> 400
-    with pytest.raises(Exception) as ei2:
+    with pytest.raises(HTTPException) as ei2:
         tpl._validate_content(INVALID_YAML_PARSE)
     assert ei2.value.status_code == 400
     # missing required fields -> 400
-    with pytest.raises(Exception) as ei3:
+    with pytest.raises(HTTPException) as ei3:
         tpl._validate_content(MISSING_FIELDS_YAML)
     assert "missing required field" in str(ei3.value.detail)
     # valid fallback
@@ -341,7 +342,7 @@ def test_validate_content_via_parser_success(monkeypatch, tdir):
         raise fake_mod.TemplateError("bad template")
 
     fake_mod.parse_template = fake_parse_fail
-    with pytest.raises(Exception) as ei:
+    with pytest.raises(HTTPException) as ei:
         tpl._validate_content(VALID_YAML)
     assert ei.value.status_code == 400
     # cleanup

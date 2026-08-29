@@ -381,13 +381,13 @@ async function submit() {
 
         <div v-if="authMode === 'cookie_headers'" class="space-y-3">
           <div>
-            <label class="text-xs font-medium block mb-1">Custom Headers <span class="text-txt-tertiary">(JSON atau per baris "Key: Value")</span></label>
-            <textarea v-model="authHeadersRaw" rows="3" placeholder='{"Authorization": "Bearer xxx"} atau&#10;Authorization: Bearer xxx'
+            <label for="auth-headers" class="text-xs font-medium block mb-1">Custom Headers <span class="text-txt-tertiary">(JSON atau per baris "Key: Value")</span></label>
+            <textarea id="auth-headers" v-model="authHeadersRaw" rows="3" placeholder='{"Authorization": "Bearer xxx"} atau&#10;Authorization: Bearer xxx'
                       class="input-field font-mono text-xs"></textarea>
           </div>
           <div>
-            <label class="text-xs font-medium block mb-1">Cookies <span class="text-txt-tertiary">(JSON atau per baris "key=value" / "key: value")</span></label>
-            <textarea v-model="authCookiesRaw" rows="3" placeholder='{"session": "abc123"} atau&#10;session=abc123'
+            <label for="auth-cookies" class="text-xs font-medium block mb-1">Cookies <span class="text-txt-tertiary">(JSON atau per baris "key=value" / "key: value")</span></label>
+            <textarea id="auth-cookies" v-model="authCookiesRaw" rows="3" placeholder='{"session": "abc123"} atau&#10;session=abc123'
                       class="input-field font-mono text-xs"></textarea>
           </div>
           <p class="text-[11px] text-txt-tertiary">Copy dari DevTools → Application → Cookies / Network → Request Headers. Dikirim di setiap request crawl & scan.</p>
@@ -395,27 +395,27 @@ async function submit() {
 
         <div v-if="authMode === 'form_login'" class="space-y-3">
           <div>
-            <label class="text-xs font-medium block mb-1">Login URL</label>
-            <input v-model="loginUrl" type="text" :placeholder="targetUrl || 'https://example.com/login'" class="input-field font-mono text-xs" />
+            <label for="login-url" class="text-xs font-medium block mb-1">Login URL</label>
+            <input id="login-url" v-model="loginUrl" type="text" :placeholder="targetUrl || 'https://example.com/login'" class="input-field font-mono text-xs" />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="text-xs font-medium block mb-1">Username / Email</label>
-              <input v-model="loginUsername" type="text" placeholder="admin@example.com" class="input-field text-xs" />
+              <label for="login-username" class="text-xs font-medium block mb-1">Username / Email</label>
+              <input id="login-username" v-model="loginUsername" type="text" placeholder="admin@example.com" class="input-field text-xs" />
             </div>
             <div>
-              <label class="text-xs font-medium block mb-1">Password</label>
-              <input v-model="loginPassword" type="password" placeholder="••••••••" class="input-field text-xs" />
+              <label for="login-password" class="text-xs font-medium block mb-1">Password</label>
+              <input id="login-password" v-model="loginPassword" type="password" placeholder="••••••••" class="input-field text-xs" />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="text-xs font-medium block mb-1">Username field name</label>
-              <input v-model="loginUField" type="text" placeholder="username" class="input-field font-mono text-xs" />
+              <label for="login-u-field" class="text-xs font-medium block mb-1">Username field name</label>
+              <input id="login-u-field" v-model="loginUField" type="text" placeholder="username" class="input-field font-mono text-xs" />
             </div>
             <div>
-              <label class="text-xs font-medium block mb-1">Password field name</label>
-              <input v-model="loginPField" type="text" placeholder="password" class="input-field font-mono text-xs" />
+              <label for="login-p-field" class="text-xs font-medium block mb-1">Password field name</label>
+              <input id="login-p-field" v-model="loginPField" type="text" placeholder="password" class="input-field font-mono text-xs" />
             </div>
           </div>
           <p class="text-[11px] text-txt-tertiary">Scanner akan GET login page → extract CSRF (csrf_token/_token/authenticity_token) → POST credentials → crawl sebagai user login. Cek field name via Inspect → &lt;input name="..."&gt; di form login.</p>
