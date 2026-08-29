@@ -139,14 +139,21 @@ function isMaskedValue(v: unknown): boolean {
   return v.includes("•") || v.includes("…") || v.includes("***");
 }
 
+function _sanitizeEntry(obj: Record<string, unknown>, key: string, value: unknown): void {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    sanitizeMaskedSecrets(value);
+    return;
+  }
+  if (typeof value === "string" && isMaskedValue(value)) {
+    obj[key] = "";
+  }
+}
+
 function sanitizeMaskedSecrets(obj: unknown): void {
   if (!obj || typeof obj !== "object") return;
-  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      sanitizeMaskedSecrets(v);
-    } else if (typeof v === "string" && isMaskedValue(v)) {
-      (obj as Record<string, unknown>)[k] = "";
-    }
+  const record = obj as Record<string, unknown>;
+  for (const [k, v] of Object.entries(record)) {
+    _sanitizeEntry(record, k, v);
   }
 }
 

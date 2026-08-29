@@ -123,6 +123,20 @@ def _validate_content(
         ) from exc  # NOSONAR - helper raise documented via route responses
 
 
+def _passes_tag_filter(data: dict, tag_filters: list) -> bool:
+    if not tag_filters:
+        return True
+    tags = _extract_tags(data)
+    return any(t in tag_filters for t in tags)
+
+
+def _passes_severity_filter(data: dict, severity_filter: list) -> bool:
+    if not severity_filter:
+        return True
+    sev = _extract_severity(data)
+    return sev in [str(s).lower() for s in severity_filter]
+
+
 def _enabled_for(data: dict) -> bool:
     """Derive enabled via config templates.* filters."""
     from ..services.config_service import read_config
@@ -136,14 +150,10 @@ def _enabled_for(data: dict) -> bool:
         return False
     tag_filters = tpl_cfg.get("tag_filters") or []
     severity_filter = tpl_cfg.get("severity_filter") or []
-    if tag_filters:
-        tags = _extract_tags(data)
-        if not any(t in tag_filters for t in tags):
-            return False
-    if severity_filter:
-        sev = _extract_severity(data)
-        if sev not in [str(s).lower() for s in severity_filter]:
-            return False
+    if not _passes_tag_filter(data, tag_filters):
+        return False
+    if not _passes_severity_filter(data, severity_filter):  # noqa: SIM103
+        return False
     return True
 
 
@@ -226,23 +236,20 @@ def get_template(template_id: str):
     }
 
 
-@router.post(
-    "",
-    status_code=201,
-    responses={
-        400: {"description": "Bad Request"},
-        409: {"description": "Conflict"},
-    },
-)
-def create_template(body: dict):
+def _require_content(body: dict) -> str:
     content = body.get("content") or body.get("yaml") or ""
     if not content or not isinstance(content, str):
         raise HTTPException(status_code=400, detail="content (YAML string) required")
+    return content
+
+
+def _ensure_size_ok(content: str) -> None:
     if len(content.encode("utf-8")) > 50 * 1024:
         raise HTTPException(status_code=400, detail="template exceeds 50KB limit")
-    # Allow explicit id override but validate consistency
+
+
+def _resolve_template_id(body: dict, parsed: dict) -> str:
     explicit_id = body.get("id")
-    parsed = _validate_content(content, source_path=explicit_id or "<inline>")
     parsed_id = str(parsed.get("id") or "")
     if explicit_id and str(explicit_id) != parsed_id:
         raise HTTPException(
@@ -252,18 +259,43 @@ def create_template(body: dict):
     tid = parsed_id or str(explicit_id or "")
     if not tid:
         raise HTTPException(status_code=400, detail="template id required")
+    return tid
+
+
+def _ensure_not_exists(tid: str) -> None:
     existing_path, _ = _find_by_id(tid)
     if existing_path is not None:
         raise HTTPException(
             status_code=409,
             detail=f"Template id '{tid}' already exists at {existing_path.relative_to(SCANNER_DIR).as_posix()}",
         )
+
+
+def _write_custom_template(tid: str, content: str) -> Path:
     cdir = _custom_dir()
     dest = cdir / f"{tid}.yaml"
-    # extra safety: prevent path traversal via id
     if dest.resolve().parent != cdir.resolve():
         raise HTTPException(status_code=400, detail="invalid id")
     dest.write_text(content, encoding="utf-8")
+    return dest
+
+
+@router.post(
+    "",
+    status_code=201,
+    responses={
+        400: {"description": "Bad Request"},
+        409: {"description": "Conflict"},
+    },
+)
+def create_template(body: dict):
+    content = _require_content(body)
+    _ensure_size_ok(content)
+    explicit_id = body.get("id")
+    parsed = _validate_content(content, source_path=explicit_id or "<inline>")
+    tid = _resolve_template_id(body, parsed)
+    _ensure_not_exists(tid)
+    dest = _write_custom_template(tid, content)
     return {"id": tid, "path": dest.relative_to(SCANNER_DIR).as_posix()}
 
 

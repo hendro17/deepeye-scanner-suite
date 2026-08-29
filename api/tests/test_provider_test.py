@@ -3,19 +3,7 @@
 import json
 import subprocess
 
-
-def _fake_run(monkeypatch, stdout: str):
-    fake = subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
-    calls = []
-    kw_calls = []
-
-    def run(*a, **k):
-        calls.append(a[0])
-        kw_calls.append(k)
-        return fake
-
-    monkeypatch.setattr("api.services.provider_test.subprocess.run", run)
-    return calls, kw_calls
+from api.tests.helpers import make_fake_run_with_capture as _fake_run
 
 
 def test_unknown_provider_no_subprocess(client, monkeypatch):

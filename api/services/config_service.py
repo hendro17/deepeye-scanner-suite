@@ -43,6 +43,23 @@ def _is_masked_value(value: object) -> bool:
     return "•" in s or "…" in s or "***" in s
 
 
+def _is_nested_merge(base: dict, key: str, val: object) -> bool:
+    return isinstance(val, dict) and isinstance(base.get(key), dict)
+
+
+def _should_skip_masked(val: object) -> bool:
+    return isinstance(val, str) and _is_masked_value(val)
+
+
+def _should_preserve_empty_secret(key: str, val: object, base: dict) -> bool:
+    return (
+        isinstance(val, str)
+        and val == ""
+        and key in _SECRET_KEYS
+        and bool(base.get(key))
+    )
+
+
 def _merge_preserve_masked(base: dict, incoming: dict) -> dict:
     """Deep-merge incoming into base, skipping masked secret values.
 
@@ -53,17 +70,14 @@ def _merge_preserve_masked(base: dict, incoming: dict) -> dict:
     can sanitize masked placeholders to '' for UX without wiping disk.
     """
     for key, val in incoming.items():
-        if isinstance(val, dict) and isinstance(base.get(key), dict):
-            _merge_preserve_masked(base[key], val)
-        elif isinstance(val, str) and _is_masked_value(val):
+        if _is_nested_merge(base, key, val):
+            _merge_preserve_masked(base[key], val)  # type: ignore[arg-type]
             continue
-        elif (
-            isinstance(val, str) and val == "" and key in _SECRET_KEYS and base.get(key)
-        ):
-            # Sanitized masked → empty should keep real secret
+        if _should_skip_masked(val):
             continue
-        else:
-            base[key] = val
+        if _should_preserve_empty_secret(key, val, base):
+            continue
+        base[key] = val
     return base
 
 

@@ -198,19 +198,21 @@ def start_scan(job_id: int, job_args: dict) -> int:
     return process.pid
 
 
-def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
+def _resolve_report_path(before: set[str]) -> str | None:
+    if not REPORTS_DIR.exists():
+        return None
+    after = {f.name for f in REPORTS_DIR.iterdir()}
+    new_files = after - before
+    json_files = [
+        f for f in new_files if f.endswith(".json") and not f.endswith(".sarif.json")
+    ]
+    if not json_files:
+        return None
+    return str(REPORTS_DIR / max(json_files))
+
+
+def _persist_job_status(job_id: int, exit_code: int, report_path: str | None) -> None:
     ended = datetime.now(timezone.utc).isoformat()
-    report_path = None
-    if REPORTS_DIR.exists():
-        after = {f.name for f in REPORTS_DIR.iterdir()}
-        new_files = after - before
-        json_files = [
-            f
-            for f in new_files
-            if f.endswith(".json") and not f.endswith(".sarif.json")
-        ]
-        if json_files:
-            report_path = str(REPORTS_DIR / max(json_files))
     conn = get_db()
     conn.execute(
         "UPDATE jobs SET status=?, report_path=?, ended_at=? WHERE id=?",
@@ -220,7 +222,9 @@ def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
     conn.close()
     if report_path:
         report_store.parse_findings(job_id, Path(report_path))
-    # cleanup per-scan temp config/macro (chmod 0o600 already, now remove)
+
+
+def _cleanup_tmp_scan_dir(job_id: int) -> None:
     try:
         import shutil
 
@@ -229,6 +233,12 @@ def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
             shutil.rmtree(tmp_scan_dir, ignore_errors=True)
     except OSError:
         pass  # NOSONAR - best-effort cleanup
+
+
+def _finalize_scan(job_id: int, exit_code: int, before: set[str]) -> str | None:
+    report_path = _resolve_report_path(before)
+    _persist_job_status(job_id, exit_code, report_path)
+    _cleanup_tmp_scan_dir(job_id)
     return report_path
 
 

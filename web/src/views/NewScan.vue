@@ -31,19 +31,20 @@ const loginPassword = ref("");
 const loginUField = ref("username");
 const loginPField = ref("password");
 
-function parseHeadersCookies(raw: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const trimmed = raw.trim();
-  if (!trimmed) return out;
-  // Try JSON first
+function _tryParseJsonHeaders(raw: string): Record<string, string> | null {
   try {
-    const j = JSON.parse(trimmed);
-    if (j && typeof j === "object") {
-      for (const [k, v] of Object.entries(j)) out[k] = String(v);
-      return out;
-    }
-  } catch {}
-  // Fallback: lines like "Key: Value" or "key=value" or "key value"
+    const j = JSON.parse(raw);
+    if (!j || typeof j !== "object") return null;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(j)) out[k] = String(v);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function _parseHeaderLines(trimmed: string): Record<string, string> {
+  const out: Record<string, string> = {};
   for (const line of trimmed.split("\n")) {
     const l = line.trim();
     if (!l) continue;
@@ -55,6 +56,14 @@ function parseHeadersCookies(raw: string): Record<string, string> {
     if (k) out[k] = v;
   }
   return out;
+}
+
+function parseHeadersCookies(raw: string): Record<string, string> {
+  const trimmed = raw.trim();
+  if (!trimmed) return {};
+  const parsed = _tryParseJsonHeaders(trimmed);
+  if (parsed) return parsed;
+  return _parseHeaderLines(trimmed);
 }
 
 function togglePattern(id: string) {
@@ -167,32 +176,45 @@ const canSubmit = computed(
   () => targetUrl.value !== "" && authorized.value && selectedCount.value > 0 && !submitting.value,
 );
 
+function _buildBaseBody(): Record<string, unknown> {
+  return {
+    target_url: targetUrl.value,
+    scope_nl: scopeNl.value || undefined,
+    checks: selectedChecks.value,
+    threads: threads.value,
+    depth: depth.value,
+    formats: formats.value,
+    secrets_enabled: secretsEnabled.value,
+    secret_patterns: secretsEnabled.value ? selectedPatterns.value : undefined,
+    auth_mode: authMode.value,
+  };
+}
+
+function _applyCookieHeaders(body: Record<string, unknown>): void {
+  const h = parseHeadersCookies(authHeadersRaw.value);
+  const c = parseHeadersCookies(authCookiesRaw.value);
+  if (Object.keys(h).length) body.auth_headers = h;
+  if (Object.keys(c).length) body.auth_cookies = c;
+}
+
+function _applyFormLogin(body: Record<string, unknown>): void {
+  body.login_url = loginUrl.value || targetUrl.value;
+  body.login_username = loginUsername.value;
+  body.login_password = loginPassword.value;
+  body.login_username_field = loginUField.value || "username";
+  body.login_password_field = loginPField.value || "password";
+}
+
+function _applyAuthToBody(body: Record<string, unknown>, mode: string): void {
+  if (mode === "cookie_headers") _applyCookieHeaders(body);
+  else if (mode === "form_login") _applyFormLogin(body);
+}
+
 async function submit() {
   submitting.value = true;
   try {
-    const body: Record<string, unknown> = {
-      target_url: targetUrl.value,
-      scope_nl: scopeNl.value || undefined,
-      checks: selectedChecks.value,
-      threads: threads.value,
-      depth: depth.value,
-      formats: formats.value,
-      secrets_enabled: secretsEnabled.value,
-      secret_patterns: secretsEnabled.value ? selectedPatterns.value : undefined,
-      auth_mode: authMode.value,
-    };
-    if (authMode.value === "cookie_headers") {
-      const h = parseHeadersCookies(authHeadersRaw.value);
-      const c = parseHeadersCookies(authCookiesRaw.value);
-      if (Object.keys(h).length) body.auth_headers = h;
-      if (Object.keys(c).length) body.auth_cookies = c;
-    } else if (authMode.value === "form_login") {
-      body.login_url = loginUrl.value || targetUrl.value;
-      body.login_username = loginUsername.value;
-      body.login_password = loginPassword.value;
-      body.login_username_field = loginUField.value || "username";
-      body.login_password_field = loginPField.value || "password";
-    }
+    const body = _buildBaseBody();
+    _applyAuthToBody(body, authMode.value);
     const res = await store.createScan(body as unknown as { target_url: string });
     await store.startScan(res.id);
     router.push(`/scan/${res.id}/live`);

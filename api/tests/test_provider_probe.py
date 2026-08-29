@@ -1,29 +1,16 @@
 """Cover provider probe branches: OSError, invalid JSON, scanner_python fallback."""
 
 import json
-import subprocess
 import sys
 
 import api.services.provider_test as pt
 from api.services import provider_probe
-
-
-def _fake_run(monkeypatch, stdout: str):
-    fake = subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
-    monkeypatch.setattr(
-        "api.services.provider_test.subprocess.run", lambda *a, **k: fake
-    )
-    return fake
+from api.tests.helpers import make_fake_run as _fake_run
 
 
 def test_provider_probe_invalid_json(client, monkeypatch):
     # proc returns non-JSON -> _INVALID_PROBE_MSG
-    fake = subprocess.CompletedProcess(
-        args=[], returncode=0, stdout="not json {", stderr=""
-    )
-    monkeypatch.setattr(
-        "api.services.provider_test.subprocess.run", lambda *a, **k: fake
-    )
+    _fake_run(monkeypatch, "not json {")
     r = client.post(
         "/api/providers/test/openai", json={"config": {"api_key": "sk-valid-123"}}
     )
