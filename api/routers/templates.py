@@ -280,6 +280,50 @@ def _write_custom_template(tid: str, content: str) -> Path:
     return dest
 
 
+def _require_content_for_update(body: dict) -> str:
+    return _require_content(body)
+
+
+def _ensure_update_size_ok(content: str) -> None:
+    _ensure_size_ok(content)
+
+
+def _find_existing_or_404(template_id: str) -> Path:
+    path, _ = _find_by_id(template_id)
+    if path is None:
+        raise HTTPException(
+            status_code=404, detail=f"Template '{template_id}' not found"
+        )
+    return path
+
+
+def _ensure_not_shipped(path: Path) -> None:
+    if _is_shipped(path):
+        raise HTTPException(
+            status_code=403,
+            detail="shipped templates are protected — duplicate to custom/ first",
+        )
+
+
+def _validate_update_content(content: str, template_id: str) -> dict:
+    parsed = _validate_content(content, source_path=template_id)
+    parsed_id = str(parsed.get("id") or "")
+    if parsed_id and parsed_id != template_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"id mismatch: URL id '{template_id}' != yaml id '{parsed_id}'",
+        )
+    return parsed
+
+
+def _backup_template(path: Path) -> None:
+    try:
+        bak = path.with_suffix(f".yaml.bak.{int(time.time())}")
+        bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    except OSError:
+        pass  # NOSONAR - best-effort backup, ignore
+
+
 @router.post(
     "",
     status_code=201,
@@ -308,34 +352,12 @@ def create_template(body: dict):
     },
 )
 def update_template(template_id: str, body: dict):
-    content = body.get("content") or body.get("yaml") or ""
-    if not content or not isinstance(content, str):
-        raise HTTPException(status_code=400, detail="content (YAML string) required")
-    if len(content.encode("utf-8")) > 50 * 1024:
-        raise HTTPException(status_code=400, detail="template exceeds 50KB limit")
-    path, _ = _find_by_id(template_id)
-    if path is None:
-        raise HTTPException(
-            status_code=404, detail=f"Template '{template_id}' not found"
-        )
-    if _is_shipped(path):
-        raise HTTPException(
-            status_code=403,
-            detail="shipped templates are protected — duplicate to custom/ first",
-        )
-    parsed = _validate_content(content, source_path=template_id)
-    parsed_id = str(parsed.get("id") or "")
-    if parsed_id and parsed_id != template_id:
-        raise HTTPException(
-            status_code=400,
-            detail=f"id mismatch: URL id '{template_id}' != yaml id '{parsed_id}'",
-        )
-    # backup
-    try:
-        bak = path.with_suffix(f".yaml.bak.{int(time.time())}")
-        bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-    except OSError:
-        pass  # NOSONAR - best-effort backup, ignore
+    content = _require_content_for_update(body)
+    _ensure_update_size_ok(content)
+    path = _find_existing_or_404(template_id)
+    _ensure_not_shipped(path)
+    _validate_update_content(content, template_id)
+    _backup_template(path)
     path.write_text(content, encoding="utf-8")
     return {"id": template_id, "path": path.relative_to(SCANNER_DIR).as_posix()}
 

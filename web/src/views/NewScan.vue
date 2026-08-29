@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useScansStore } from "../stores/scans";
 import { CHECK_CATEGORIES, ALL_CHECKS, checkLabel, presetChecks, type PresetId } from "../constants/checks";
 import { SECRET_PATTERNS, ALL_SECRET_PATTERNS } from "../constants/secrets";
+import { CATEGORY_TIPS } from "../constants/scanTips";
 import { api } from "../api/client";
 import InfoTip from "../components/InfoTip.vue";
 
@@ -74,24 +75,6 @@ function togglePattern(id: string) {
 
 const crawlTargets = ref<string[]>([]);
 const ingesting = ref(false);
-
-const CATEGORY_TIPS: Record<string, string> = {
-  injection: "Menyisipkan kode/perintah jahat lewat input aplikasi: SQL, XSS, command, NoSQL, LDAP, XML, template (SSTI), CRLF, SSE.",
-  ssrf_path_traversal: "Memaksa server memanggil alamat internal (SSRF) atau membaca file di luar folder web (Path Traversal, LFI, RFI, redirect).",
-  auth_session: "Menguji kelemahan login, sesi, CSRF, token JWT, OAuth, dan SAML.",
-  config_exposure: "Konfigurasi salah dan data sensitif terekspos: CORS, CSP, cloud, header, email injection.",
-  xxe_deserialization: "Eksploitasi parsing XML (XXE) dan deserialisasi objek yang tidak aman.",
-  http_header_attacks: "Manipulasi header HTTP: Host header, method override, HTTP request smuggling.",
-  api_graphql: "Tes khusus REST API dan GraphQL: BOLA/IDOR, otentikasi API, introspection GraphQL.",
-  business_logic: "Cacat alur bisnis aplikasi: race condition, mass assignment, manipulasi proses.",
-  file_webshell: "Menguji upload file berbahaya dan mendeteksi webshell di server.",
-  websocket: "Kelemahan pada komunikasi real-time WebSocket.",
-  cache_supply_chain: "Cache poisoning/deception dan risiko skrip pihak ketiga (supply chain).",
-  recon_discovery: "Pemetaan target: brute force direktori, port scan, subdomain takeover, deteksi WAF.",
-  mobile: "Tes aplikasi mobile Android/iOS: hooking Frida, analisis statis, SSL pinning.",
-  specialized: "Deteksi khusus: anomali dengan AI, pemindaian secret, eksploitasi Log4Shell.",
-  parameter_pollution: "Mengirim parameter ganda/berulang (HTTP Parameter Pollution) untuk melewati filter.",
-};
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

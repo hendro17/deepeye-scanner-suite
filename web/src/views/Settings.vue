@@ -144,9 +144,8 @@ function _sanitizeEntry(obj: Record<string, unknown>, key: string, value: unknow
     sanitizeMaskedSecrets(value);
     return;
   }
-  if (typeof value === "string" && isMaskedValue(value)) {
-    obj[key] = "";
-  }
+  if (typeof value !== "string" || !isMaskedValue(value)) return;
+  obj[key] = "";
 }
 
 function sanitizeMaskedSecrets(obj: unknown): void {

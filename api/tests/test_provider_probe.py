@@ -5,18 +5,18 @@ import sys
 
 import api.services.provider_test as pt
 from api.services import provider_probe
-from api.tests.helpers import make_fake_run as _fake_run
+from api.tests.helpers import assert_probe_failed, probe_post, run_probe_case
 
 
 def test_provider_probe_invalid_json(client, monkeypatch):
-    # proc returns non-JSON -> _INVALID_PROBE_MSG
-    _fake_run(monkeypatch, "not json {")
-    r = client.post(
-        "/api/providers/test/openai", json={"config": {"api_key": "sk-valid-123"}}
+    body = run_probe_case(
+        client,
+        monkeypatch,
+        "not json {",
+        provider="openai",
+        config={"api_key": "sk-valid-123"},
     )
-    body = r.json()
-    assert body["success"] is False
-    assert "Invalid probe" in body["message"]
+    assert_probe_failed(body, "Invalid probe")
 
 
 def test_provider_probe_oserror(client, monkeypatch):
@@ -24,25 +24,31 @@ def test_provider_probe_oserror(client, monkeypatch):
         raise OSError("no such file")
 
     monkeypatch.setattr("api.services.provider_test.subprocess.run", boom)
-    r = client.post(
-        "/api/providers/test/openai", json={"config": {"api_key": "sk-valid"}}
-    )
-    assert r.json()["success"] is False
-    assert "no such file" in r.json()["message"]
+    body = probe_post(client, "openai", {"api_key": "sk-valid"}).json()
+    assert body["success"] is False
+    assert "no such file" in body["message"]
 
 
 def test_provider_probe_empty_error_field(client, monkeypatch):
-    # {"ok": false, "error": null} -> fallback to "Probe failed"
-    _fake_run(monkeypatch, '{"ok": false, "error": null}')
-    r = client.post("/api/providers/test/openai", json={"config": {"api_key": "sk-ok"}})
-    assert r.json()["success"] is False
-    assert "Probe failed" in r.json()["message"]
+    body = run_probe_case(
+        client,
+        monkeypatch,
+        '{"ok": false, "error": null}',
+        provider="openai",
+        config={"api_key": "sk-ok"},
+    )
+    assert_probe_failed(body, "Probe failed")
 
 
 def test_provider_probe_missing_error_key(client, monkeypatch):
-    _fake_run(monkeypatch, '{"ok": false}')
-    r = client.post("/api/providers/test/grok", json={"config": {"api_key": "sk-ok"}})
-    assert r.json()["success"] is False
+    body = run_probe_case(
+        client,
+        monkeypatch,
+        '{"ok": false}',
+        provider="grok",
+        config={"api_key": "sk-ok"},
+    )
+    assert_probe_failed(body)
 
 
 def test_scanner_python_fallback_no_venv(monkeypatch, tmp_path):
