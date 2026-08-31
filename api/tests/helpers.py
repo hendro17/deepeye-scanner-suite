@@ -108,7 +108,7 @@ def install_fake_provider(
 
     class FakeProv:
         def __init__(self, cfg: Any) -> None:
-            pass
+            pass  # intentionally empty — test double, no state needed
 
         def generate(self, *a: Any, **k: Any) -> Any:
             if generate_fn is not None:

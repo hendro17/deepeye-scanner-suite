@@ -12,6 +12,7 @@ TEMPLATES_DIR = SCANNER_DIR / "templates"
 CUSTOM_DIR = TEMPLATES_DIR / "custom"
 
 YAML_PATTERN = "*.yaml"
+INLINE_SOURCE = "<inline>"
 
 
 def _custom_dir() -> Path:
@@ -107,12 +108,10 @@ def _validate_required_fields(data: dict) -> None:
             )  # NOSONAR - helper raise documented via route responses
 
 
-def _validate_id_match(data: dict, effective_source: str) -> None:
+def _validate_id_match(_data: dict, effective_source: str) -> None:
     # No-op when source is generic; reserved for strict id/source check
-    if effective_source == "<inline>":
+    if effective_source == INLINE_SOURCE:
         return
-    # parser already validates; fallback keeps minimal check
-    return
 
 
 def _validate_info(data: dict) -> None:
@@ -202,7 +201,7 @@ def _resolve_effective_source(source_path: str, source: str | None) -> str:
 
 
 def _validate_content(
-    content: str, source_path: str = "<inline>", source: str | None = None
+    content: str, source_path: str = INLINE_SOURCE, source: str | None = None
 ) -> dict:
     """Validate via template_engine/parser.py parse_template. Raise HTTPException 400 on fail."""
     effective_source = _resolve_effective_source(source_path, source)
@@ -425,7 +424,7 @@ def create_template(body: dict):
     content = _require_content(body)
     _ensure_size_ok(content)
     explicit_id = body.get("id")
-    parsed = _validate_content(content, source_path=explicit_id or "<inline>")
+    parsed = _validate_content(content, source_path=explicit_id or INLINE_SOURCE)
     tid = _resolve_template_id(body, parsed)
     _ensure_not_exists(tid)
     dest = _write_custom_template(tid, content)
