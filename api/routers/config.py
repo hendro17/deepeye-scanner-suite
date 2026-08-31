@@ -1,7 +1,12 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..services.config_service import mask_config, read_config, write_config
+from ..services.config_service import (
+    _merge_preserve_masked,
+    mask_config,
+    read_config,
+    write_config,
+)
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -18,5 +23,10 @@ async def get_config():
 
 @router.put("")
 async def update_config(body: ConfigUpdate):
-    write_config(body.config)
+    existing = read_config()
+    # Merge incoming config onto existing, preserving real secrets when
+    # frontend sends back masked placeholders (e.g. "sk-••••e2e4").
+    # Without this, GET (masked) → PUT (masked blind write) corrupts disk.
+    merged = _merge_preserve_masked(existing, body.config)
+    write_config(merged)
     return {"success": True}

@@ -16,27 +16,32 @@ def parse_findings(job_id: int, json_path: Path) -> int:
 
     conn = get_db()
     for v in vulns:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO findings (job_id, type, severity, url, parameter, payload,
                                   evidence, remediation, fingerprint, cve_refs, ai_summary,
                                   false_positive, description, screenshot)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            job_id,
-            v.get("type"),
-            v.get("severity"),
-            v.get("url"),
-            v.get("parameter"),
-            v.get("payload"),
-            v.get("evidence"),
-            v.get("remediation"),
-            v.get("fingerprint"),
-            json.dumps(v.get("cve_references")) if v.get("cve_references") else None,
-            v.get("ai_evidence_summary"),
-            1 if v.get("false_positive") else 0,
-            v.get("description"),
-            v.get("screenshot"),
-        ))
+        """,
+            (
+                job_id,
+                v.get("type"),
+                v.get("severity"),
+                v.get("url"),
+                v.get("parameter"),
+                v.get("payload"),
+                v.get("evidence"),
+                v.get("remediation"),
+                v.get("fingerprint"),
+                json.dumps(v.get("cve_references"))
+                if v.get("cve_references")
+                else None,
+                v.get("ai_evidence_summary"),
+                1 if v.get("false_positive") else 0,
+                v.get("description"),
+                v.get("screenshot"),
+            ),
+        )
     conn.commit()
     conn.close()
     return len(vulns)
@@ -46,16 +51,22 @@ def list_reports() -> list[dict]:
     if not REPORTS_DIR.exists():
         return []
     files = []
-    for f in sorted(REPORTS_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+    for f in sorted(
+        REPORTS_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True
+    ):
         ext = f.suffix.lstrip(".").lower()
         if ext not in ("html", "pdf", "json", "sarif", "xml", "csv", "xlsx"):
             continue
-        files.append({
-            "filename": f.name,
-            "format": ext,
-            "size": f.stat().st_size,
-            "created_at": datetime.fromtimestamp(f.stat().st_mtime, timezone.utc).isoformat(),
-        })
+        files.append(
+            {
+                "filename": f.name,
+                "format": ext,
+                "size": f.stat().st_size,
+                "created_at": datetime.fromtimestamp(
+                    f.stat().st_mtime, timezone.utc
+                ).isoformat(),
+            }
+        )
     return files
 
 
@@ -80,12 +91,14 @@ def _read_report_metadata(report_path: str | None) -> tuple[int, object]:
 
 def get_findings(job_id: int) -> dict:
     conn = get_db()
-    rows = conn.execute("SELECT * FROM findings WHERE job_id=? ORDER BY severity, id", (job_id,))
+    rows = conn.execute(
+        "SELECT * FROM findings WHERE job_id=? ORDER BY severity, id", (job_id,)
+    )
     findings = [finding_to_dict(r) for r in rows]
     job = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
     conn.close()
 
-    severity_counts = {}
+    severity_counts: dict[str, int] = {}
     for f in findings:
         sev = f.get("severity", "info")
         severity_counts[sev] = severity_counts.get(sev, 0) + 1

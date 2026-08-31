@@ -12,11 +12,14 @@ def test_config_read(client):
 
 
 def test_scan_create(client):
-    r = client.post("/api/scans", json={
-        "target_url": "http://example.com",
-        "threads": 5,
-        "depth": 2,
-    })
+    r = client.post(
+        "/api/scans",
+        json={
+            "target_url": "http://example.com",
+            "threads": 5,
+            "depth": 2,
+        },
+    )
     assert r.status_code == 200
     body = r.json()
     assert "id" in body
@@ -53,7 +56,9 @@ def test_scan_bare_domain_normalized_to_https(client):
 
 
 def test_scan_formats_always_include_json(client):
-    r = client.post("/api/scans", json={"target_url": "http://example.com", "formats": ["html"]})
+    r = client.post(
+        "/api/scans", json={"target_url": "http://example.com", "formats": ["html"]}
+    )
     assert r.status_code == 200
     stored = client.get(f"/api/scans/{r.json()['id']}").json()
     assert "json" in stored["args"]["formats"]

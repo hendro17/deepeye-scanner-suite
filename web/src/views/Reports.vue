@@ -5,7 +5,8 @@ import { api } from "../api/client";
 
 const route = useRoute();
 const scanId = Number(route.params.id);
-const reports = ref<any[]>([]);
+type ReportFile = Record<string, unknown> & { filename: string; format: string; size: number; created_at?: string };
+const reports = ref<ReportFile[]>([]);
 const loading = ref(true);
 
 const formatColors: Record<string, string> = {
@@ -28,7 +29,7 @@ function extOf(filename: string): string {
 
 onMounted(async () => {
   try {
-    reports.value = await api.reports.list();
+    reports.value = await api.reports.list() as ReportFile[];
   } finally {
     loading.value = false;
   }

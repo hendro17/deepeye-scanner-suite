@@ -130,12 +130,13 @@ describe("Settings.vue providers test button", () => {
     expect(wrapper.text()).toContain("✓ Connected");
   });
 
-  it("persists Connected badge after a successful test", async () => {
+  it("shows Connected badge after a successful test (ephemeral, not persisted)", async () => {
     const wrapper = mountSettings();
     await flushPromises();
     await testButton(wrapper, "Test API Key").trigger("click");
     await flushPromises();
     expect(wrapper.findAll(".sev-green").length).toBeGreaterThanOrEqual(1);
-    expect(JSON.parse(localStorage.getItem("deepeye:providers-connected") ?? "{}").openai.ok).toBe(true);
+    // Must NOT persist across refresh — localStorage cleared
+    expect(localStorage.getItem("deepeye:providers-connected")).toBeNull();
   });
 });

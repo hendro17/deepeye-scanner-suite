@@ -26,18 +26,18 @@ onMounted(() => {
   es = new EventSource(api.scans.streamUrl(scanId));
 
   es.addEventListener("log", (e: MessageEvent) => {
-    const data = JSON.parse(e.data);
+    const data = JSON.parse(e.data) as { line: string; timestamp: string };
     logs.value.push(data);
     if (logs.value.length > 10000) logs.value.shift();
-    autoScroll();
+    void autoScroll();
   });
 
   es.addEventListener("done", (e: MessageEvent) => {
-    const data = JSON.parse(e.data);
+    const data = JSON.parse(e.data) as { exit_code: number };
     logs.value.push({ line: `[SCAN COMPLETE] exit code: ${data.exit_code}`, timestamp: new Date().toISOString() });
     status.value = data.exit_code === 0 ? "completed" : "failed";
     es?.close();
-    autoScroll();
+    void autoScroll();
   });
 
   es.onerror = () => {

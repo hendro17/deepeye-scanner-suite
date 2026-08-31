@@ -13,15 +13,51 @@ def _insert_finding(conn, job_id: int, finding: dict):
 
 
 def test_compare_scans(client):
-    a = client.post("/api/scans", json={"target_url": "http://example.com"}).json()["id"]
-    b = client.post("/api/scans", json={"target_url": "http://example.com"}).json()["id"]
+    a = client.post("/api/scans", json={"target_url": "http://example.com"}).json()[
+        "id"
+    ]
+    b = client.post("/api/scans", json={"target_url": "http://example.com"}).json()[
+        "id"
+    ]
 
     from api.database import get_db
+
     conn = get_db()
-    _insert_finding(conn, a, {"type": "sqli", "severity": "high", "url": "http://example.com/a", "parameter": "id", "fingerprint": "fp-a"})
-    _insert_finding(conn, a, {"type": "xss", "severity": "low", "url": "http://example.com/r"})
-    _insert_finding(conn, b, {"type": "sqli", "severity": "critical", "url": "http://example.com/a", "parameter": "id", "fingerprint": "fp-a"})
-    _insert_finding(conn, b, {"type": "ssti", "severity": "high", "url": "http://example.com/b", "parameter": "tpl"})
+    _insert_finding(
+        conn,
+        a,
+        {
+            "type": "sqli",
+            "severity": "high",
+            "url": "http://example.com/a",
+            "parameter": "id",
+            "fingerprint": "fp-a",
+        },
+    )
+    _insert_finding(
+        conn, a, {"type": "xss", "severity": "low", "url": "http://example.com/r"}
+    )
+    _insert_finding(
+        conn,
+        b,
+        {
+            "type": "sqli",
+            "severity": "critical",
+            "url": "http://example.com/a",
+            "parameter": "id",
+            "fingerprint": "fp-a",
+        },
+    )
+    _insert_finding(
+        conn,
+        b,
+        {
+            "type": "ssti",
+            "severity": "high",
+            "url": "http://example.com/b",
+            "parameter": "tpl",
+        },
+    )
     conn.commit()
     conn.close()
 
@@ -34,13 +70,15 @@ def test_compare_scans(client):
     assert body["resolved_count"] == 1
     assert body["resolved_vulnerabilities"][0]["type"] == "xss"
     assert body["persisting_count"] == 1
-    assert body["severity_changes"] == [{
-        "type": "sqli",
-        "url": "http://example.com/a",
-        "parameter": "id",
-        "severity_a": "high",
-        "severity_b": "critical",
-    }]
+    assert body["severity_changes"] == [
+        {
+            "type": "sqli",
+            "url": "http://example.com/a",
+            "parameter": "id",
+            "severity_a": "high",
+            "severity_b": "critical",
+        }
+    ]
     assert body["scan_a"]["id"] == a
     assert body["scan_b"]["id"] == b
 

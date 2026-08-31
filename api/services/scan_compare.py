@@ -5,9 +5,7 @@ def _match_key(finding: dict) -> str:
     fp = finding.get("fingerprint")
     if fp:
         return str(fp)
-    return "|".join(
-        str(finding.get(k) or "") for k in ("type", "url", "parameter")
-    )
+    return "|".join(str(finding.get(k) or "") for k in ("type", "url", "parameter"))
 
 
 def _load_keyed_findings(job_id: int) -> dict:
@@ -20,7 +18,9 @@ def _load_keyed_findings(job_id: int) -> dict:
     return {_match_key(f): f for f in findings}
 
 
-def _find_severity_changes(findings_a: dict, findings_b: dict) -> tuple[int, list[dict]]:
+def _find_severity_changes(
+    findings_a: dict, findings_b: dict
+) -> tuple[int, list[dict]]:
     persisting_count = 0
     severity_changes = []
     for k, fb in findings_b.items():
@@ -31,13 +31,15 @@ def _find_severity_changes(findings_a: dict, findings_b: dict) -> tuple[int, lis
         sev_a = fa.get("severity") or ""
         sev_b = fb.get("severity") or ""
         if sev_a != sev_b:
-            severity_changes.append({
-                "type": fb.get("type"),
-                "url": fb.get("url"),
-                "parameter": fb.get("parameter"),
-                "severity_a": fa.get("severity"),
-                "severity_b": fb.get("severity"),
-            })
+            severity_changes.append(
+                {
+                    "type": fb.get("type"),
+                    "url": fb.get("url"),
+                    "parameter": fb.get("parameter"),
+                    "severity_a": fa.get("severity"),
+                    "severity_b": fb.get("severity"),
+                }
+            )
     return persisting_count, severity_changes
 
 

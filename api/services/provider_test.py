@@ -1,4 +1,5 @@
 """Service that tests a provider's API key by probing it in the scanner venv."""
+
 import json
 import os
 import subprocess
@@ -71,7 +72,12 @@ def _is_known_provider(name: str) -> bool:
 
 
 def _result(provider: str, success: bool, message: str, latency: int) -> dict:
-    return {"provider": provider, "success": success, "message": message, "latency_ms": latency}
+    return {
+        "provider": provider,
+        "success": success,
+        "message": message,
+        "latency_ms": latency,
+    }
 
 
 def _failure(provider: str, message: str, latency: int) -> dict:
@@ -126,6 +132,7 @@ def _run_probe(name: str, cfg: dict, timeout: int):
         timeout=timeout,
         cwd=str(SCANNER_DIR),
         env=_PROBE_ENV,
+        check=False,
     )
 
 
@@ -156,7 +163,9 @@ def run_provider_test(name: str, body_config: dict | None = None) -> dict:
     try:
         proc = _run_probe(name, cfg, timeout)
     except subprocess.TimeoutExpired:
-        return _failure(name, f"Connection timed out after {timeout}s", _elapsed_ms(start))
+        return _failure(
+            name, f"Connection timed out after {timeout}s", _elapsed_ms(start)
+        )
     except OSError as exc:
         return _failure(name, str(exc), _elapsed_ms(start))
 
