@@ -80,7 +80,7 @@ function parseHeadersCookies(raw: string): Record<string, string> {
   return _parseHeaderLines(trimmed);
 }
 
-function togglePattern(id: string) {
+function togglePattern({ id }: { id: string }) {
   const idx = selectedPatterns.value.indexOf(id);
   if (idx >= 0) selectedPatterns.value.splice(idx, 1);
   else selectedPatterns.value.push(id);
@@ -109,7 +109,7 @@ async function onSpecFile(e: Event) {
   }
 }
 
-function applyTarget(t: string) {
+function applyTarget({ t }: { t: string }) {
   targetUrl.value = t;
 }
 
@@ -119,7 +119,7 @@ function applyAllToScope() {
   scopeNl.value = SCOPE_PREFIX + crawlTargets.value.join(SEPARATORS.SPACE);
 }
 
-function toggleFormat(fmt: string) {
+function toggleFormat({ fmt }: { fmt: string }) {
   const idx = formats.value.indexOf(fmt);
   if (idx >= 0) formats.value.splice(idx, 1);
   else formats.value.push(fmt);
@@ -127,11 +127,11 @@ function toggleFormat(fmt: string) {
 
 const selectedChecks = ref<string[]>([...ALL_CHECKS]);
 
-function isCheckSelected(id: string) {
+function isCheckSelected({ id }: { id: string }) {
   return selectedChecks.value.includes(id);
 }
 
-function toggleCheck(id: string) {
+function toggleCheck({ id }: { id: string }) {
   const idx = selectedChecks.value.indexOf(id);
   if (idx >= 0) selectedChecks.value.splice(idx, 1);
   else selectedChecks.value.push(id);
@@ -150,7 +150,7 @@ function applyPreset(preset: PresetId) {
   selectedChecks.value = presetChecks(preset);
 }
 
-function categorySelectedCount(checks: string[]) {
+function categorySelectedCount({ checks }: { checks: string[] }) {
   return checks.filter((c) => selectedChecks.value.includes(c)).length;
 }
 
@@ -256,7 +256,7 @@ async function submit() {
             <div v-for="t in crawlTargets" :key="t"
                  class="flex items-center justify-between gap-3 rounded border border-[rgba(0,240,255,0.12)] px-3 py-1.5">
               <code class="text-xs truncate font-mono">{{ t }}</code>
-              <button type="button" @click="applyTarget(t)"
+              <button type="button" @click="applyTarget({ t })"
                       class="shrink-0 px-2 py-1 rounded text-[11px] font-medium border transition-all bg-[rgba(0,240,255,0.15)] text-neon-cyan border-[rgba(0,240,255,0.4)]">
                 Use
               </button>
@@ -302,21 +302,21 @@ async function submit() {
             <div class="flex items-center justify-between mb-2">
               <p class="text-[13px] font-semibold uppercase tracking-wide text-txt-secondary">{{ category.name }}</p>
               <span class="text-[11px] font-mono px-1.5 py-0.5 rounded border border-[rgba(0,240,255,0.12)] text-txt-secondary">
-                {{ categorySelectedCount(category.checks) }}/{{ category.checks.length }}
+                {{ categorySelectedCount({ checks: category.checks }) }}/{{ category.checks.length }}
               </span>
             </div>
             <ul class="space-y-2">
               <li v-for="checkId in category.checks" :key="checkId">
-                <div class="flex items-center gap-2.5 cursor-pointer select-none" @click="toggleCheck(checkId)">
-                  <button type="button" role="switch" :aria-checked="isCheckSelected(checkId)"
-                          @click.stop="toggleCheck(checkId)"
+                <div class="flex items-center gap-2.5 cursor-pointer select-none" @click="toggleCheck({ id: checkId })">
+                  <button type="button" role="switch" :aria-checked="isCheckSelected({ id: checkId })"
+                          @click.stop="toggleCheck({ id: checkId })"
                           class="relative shrink-0 w-10 h-[22px] rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neon-cyan"
-                          :class="isCheckSelected(checkId) ? 'bg-[rgba(0,240,255,0.35)]' : 'bg-[rgba(255,255,255,0.08)]'">
+                          :class="isCheckSelected({ id: checkId }) ? 'bg-[rgba(0,240,255,0.35)]' : 'bg-[rgba(255,255,255,0.08)]'">
                     <span aria-hidden="true"
                           class="absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full transition-transform duration-150"
-                          :class="isCheckSelected(checkId) ? 'translate-x-[18px] bg-neon-cyan' : 'translate-x-0 bg-txt-tertiary'"></span>
+                          :class="isCheckSelected({ id: checkId }) ? 'translate-x-[18px] bg-neon-cyan' : 'translate-x-0 bg-txt-tertiary'"></span>
                   </button>
-                  <span class="text-sm" :class="isCheckSelected(checkId) ? 'text-txt-primary' : 'text-txt-secondary'">{{ checkLabel(checkId) }}<InfoTip :tip="CATEGORY_TIPS[category.id]" /></span>
+                  <span class="text-sm" :class="isCheckSelected({ id: checkId }) ? 'text-txt-primary' : 'text-txt-secondary'">{{ checkLabel(checkId) }}<InfoTip :tip="CATEGORY_TIPS[category.id]" /></span>
                 </div>
               </li>
             </ul>
@@ -341,7 +341,7 @@ async function submit() {
         <p class="text-sm font-medium block mb-3">Report Formats<InfoTip tip="Format file laporan hasil scan — bebas pilih lebih dari satu. HTML untuk dibaca di browser, PDF untuk dokumen formal, JSON/SARIF untuk tools lain, JUnit untuk CI/CD, CSV/XLSX untuk spreadsheet." /></p>
         <div class="flex flex-wrap gap-2">
           <button v-for="fmt in ALL_REPORT_FORMATS" :key="fmt"
-                  @click="toggleFormat(fmt)"
+                  @click="toggleFormat({ fmt })"
                   :class="['px-3 py-1.5 rounded text-xs font-medium border transition-all',
                     formats.includes(fmt)
                       ? 'bg-[rgba(0,240,255,0.15)] text-neon-cyan border-[rgba(0,240,255,0.4)]'
@@ -369,7 +369,7 @@ async function submit() {
         </div>
 
         <div v-if="secretsEnabled" class="flex flex-wrap gap-2 mt-4">
-          <button v-for="p in SECRET_PATTERNS" :key="p.id" type="button" @click="togglePattern(p.id)"
+          <button v-for="p in SECRET_PATTERNS" :key="p.id" type="button" @click="togglePattern({ id: p.id })"
                   :class="['px-3 py-1.5 rounded text-xs font-medium border transition-all',
                     selectedPatterns.includes(p.id)
                       ? 'bg-[rgba(0,240,255,0.15)] text-neon-cyan border-[rgba(0,240,255,0.4)]'

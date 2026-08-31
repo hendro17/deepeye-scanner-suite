@@ -68,6 +68,12 @@ def _is_shipped(path: Path) -> bool:
     return not str(rel).startswith("custom/") and not str(rel).startswith("custom\\")
 
 
+def _matches_id(data: object, template_id: str) -> bool:
+    if not isinstance(data, dict):
+        return False
+    return str(data.get("id") or "") == template_id
+
+
 def _find_by_id(template_id: str) -> tuple[Path | None, dict | None]:
     """Search all yaml files for matching id. Returns (path, data) or (None, None)."""
     if not TEMPLATES_DIR.is_dir():
@@ -78,7 +84,7 @@ def _find_by_id(template_id: str) -> tuple[Path | None, dict | None]:
                 data = yaml.safe_load(f)
         except (OSError, yaml.YAMLError):
             continue
-        if isinstance(data, dict) and str(data.get("id") or "") == template_id:
+        if _matches_id(data, template_id):
             return p, data
     return None, None
 
@@ -336,14 +342,19 @@ def _ensure_size_ok(content: str) -> None:
         raise HTTPException(status_code=400, detail="template exceeds 50KB limit")
 
 
-def _resolve_template_id(body: dict, parsed: dict) -> str:
-    explicit_id = body.get("id")
-    parsed_id = str(parsed.get("id") or "")
+def _check_id_mismatch(explicit_id: object, parsed_id: str) -> None:
     if explicit_id and str(explicit_id) != parsed_id:
         raise HTTPException(
             status_code=400,
             detail=f"id mismatch: body.id '{explicit_id}' != yaml id '{parsed_id}'",
         )
+
+
+def _resolve_template_id(body: dict, parsed: dict) -> str:
+    explicit_id = body.get("id")
+    parsed_id = str(parsed.get("id") or "")
+    # ponytail: _check_id_mismatch drops CC 9→~3; inline if validation grows
+    _check_id_mismatch(explicit_id, parsed_id)
     tid = parsed_id or str(explicit_id or "")
     if not tid:
         raise HTTPException(status_code=400, detail="template id required")

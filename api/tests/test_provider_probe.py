@@ -99,38 +99,33 @@ def test_provider_probe_script_unknown_provider(capsys):
     assert "unknown provider" in json.loads(out)["error"].lower()
 
 
-def test_provider_probe_script_success(monkeypatch, capsys):
-    install_fake_provider()
+def _run_probe_with_fake(capsys, raise_fn=None):  # type: ignore[no-untyped-def]
+    install_fake_provider(raise_fn) if raise_fn else install_fake_provider()
     sys.argv = ["provider_probe.py", "openai", json.dumps({"api_key": "sk-123"})]
     provider_probe.main()
     out = capsys.readouterr().out.strip().splitlines()[-1]
-    assert json.loads(out)["ok"] is True
+    j = json.loads(out)
     sys.modules.pop("ai_providers.openai_provider", None)
+    return j
+
+
+def test_provider_probe_script_success(monkeypatch, capsys):
+    assert _run_probe_with_fake(capsys)["ok"] is True
 
 
 def test_provider_probe_script_empty_response_is_ok(monkeypatch, capsys):
     def _raise_empty(*_a, **_k):
         raise RuntimeError("empty response from model")
 
-    install_fake_provider(_raise_empty)
-    sys.argv = ["provider_probe.py", "openai", json.dumps({"api_key": "sk-123"})]
-    provider_probe.main()
-    out = capsys.readouterr().out.strip().splitlines()[-1]
-    assert json.loads(out)["ok"] is True
-    sys.modules.pop("ai_providers.openai_provider", None)
+    assert _run_probe_with_fake(capsys, _raise_empty)["ok"] is True
 
 
 def test_provider_probe_script_exception_is_failure(monkeypatch, capsys):
     def _raise_401(*_a, **_k):
         raise RuntimeError("401 bad key")
 
-    install_fake_provider(_raise_401)
-    sys.argv = ["provider_probe.py", "openai", json.dumps({"api_key": "sk-bad"})]
-    provider_probe.main()
-    out = capsys.readouterr().out.strip().splitlines()[-1]
-    j = json.loads(out)
+    j = _run_probe_with_fake(capsys, _raise_401)
     assert j["ok"] is False and "401" in j["error"]
-    sys.modules.pop("ai_providers.openai_provider", None)
 
 
 def test_prepare_config_overlay_ignored_masked(monkeypatch, tmp_path):
