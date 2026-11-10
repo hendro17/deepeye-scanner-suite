@@ -48,9 +48,19 @@ export function useProviderTest() {
       const res = await api.providers.test(name, { config: payload });
       const ok = Boolean(res.success);
       if (ok) markConnected(name);
+      let message = "";
+      if (typeof res.message === "string") {
+        message = res.message;
+      } else if (res.message != null) {
+        message = JSON.stringify(res.message);
+      }
       providersTests.value[name] = {
         running: false,
-        result: { ok, message: String(res.message ?? ""), ms: Number(res.latency_ms ?? 0) },
+        result: {
+          ok,
+          message,
+          ms: Number(res.latency_ms ?? 0),
+        },
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

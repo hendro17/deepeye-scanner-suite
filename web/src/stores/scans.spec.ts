@@ -32,7 +32,7 @@ describe("useScansStore", () => {
     const store = useScansStore();
     const res = await store.createScan({ target_url: "http://x.com" });
     expect(res.id).toBe(1);
-    expect(store.scans.length).toBe(1);
+    expect(store.scans).toHaveLength(1);
   });
 
   it("loading flag resets on error", async () => {
