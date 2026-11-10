@@ -50,7 +50,11 @@ export function useProviderTest() {
       if (ok) markConnected(name);
       providersTests.value[name] = {
         running: false,
-        result: { ok, message: String(res.message ?? ""), ms: Number(res.latency_ms ?? 0) },
+        result: {
+          ok,
+          message: typeof res.message === "string" ? res.message : res.message == null ? "" : JSON.stringify(res.message),
+          ms: Number(res.latency_ms ?? 0),
+        },
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
